@@ -1,0 +1,48 @@
+---
+source: src/output/human/mod.rs
+expression: s
+---
+  grip  ·  live handshake  example.com:443
+  ────────────────────────────────────────────────────────────────────
+
+  ╭─ negotiated ─────────────────────────────────────────────────────╮
+  │  tls version      TLS 1.3                                        │
+  │  cipher suite     TLS_AES_128_GCM_SHA256  0x1301                 │
+  │  key exchange     X25519                                         │
+  │  alpn             h2                                             │
+  │  sni              example.com  hostname                          │
+  │  offered          TLS 1.3 · TLS 1.2                              │
+  ╰──────────────────────────────────────────────────────────────────╯
+
+  ╭─ certificate ────────────────────────────────────────────────────╮
+  │  subject          CN=example.com                                 │
+  │  issuer           C=US, O=DigiCert, CN=DigiCert Global G3        │
+  │  sans             example.com  www.example.com  cdn.exa…  +1 more│
+  │  expires          2026-11-15 (77 days)                           │
+  │  sha-256          a8:3f:c1:44:9e:02:bb:71                        │
+  │  ct logs          2 scts embedded                                │
+  ╰──────────────────────────────────────────────────────────────────╯
+
+  ╭─ chain of trust ─────────────────────────────────────────────────╮
+  │  leaf             CN=example.com  depth 0                        │
+  │                   └─ a8:3f:c1:44:9e:02:bb:71                     │
+  │  issuer           CN=example.com  depth 1                        │
+  │                   └─ a8:3f:c1:44:9e:02:bb:71                     │
+  ╰──────────────────────────────────────────────────────────────────╯
+
+  ╭─ fingerprints ───────────────────────────────────────────────────╮
+  │  ja3              cd08e31494f9531f560d64c695473da9               │
+  │  ja4              t13d1516h2_8daaf6152771_e5627ecdbbe6           │
+  │  ja4s             t13d020000_1301_1acd28cc39f1                   │
+  │                   matches Chrome 120                             │
+  ╰──────────────────────────────────────────────────────────────────╯
+
+  ╭─ telemetry ──────────────────────────────────────────────────────╮
+  │  handshake        42 ms                                          │
+  │  bytes            204 out  95 in                                 │
+  │  grease           2 filtered                                     │
+  │  resolved         93.184.216.34:443                              │
+  ╰──────────────────────────────────────────────────────────────────╯
+
+  ────────────────────────────────────────────────────────────────────
+  ◆  42 ms  ·  Chrome 120
