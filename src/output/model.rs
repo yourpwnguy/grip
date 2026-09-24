@@ -6,6 +6,14 @@
 
 use serde::Serialize;
 
+/// Stored in [`Fingerprints::lookup`] / [`ClientEntry::client`] when
+/// `--lookup` was requested but the database had no match.
+///
+/// `None` means lookup was never requested (renderers omit the row or show
+/// "—"); `Some(UNCLASSIFIED)` means it ran and missed (renderers show the
+/// word, muted). Exact matches carry the client name.
+pub const UNCLASSIFIED: &str = "unclassified";
+
 /// Negotiated connection info for live mode.
 #[derive(Debug, Clone, Serialize)]
 pub struct NegotiatedInfo {
