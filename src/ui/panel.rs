@@ -1,16 +1,21 @@
-//! Panels — the aligned, boxed layout primitive for final output.
+//! Report layout — section headers, key/value rows, and word wrapping.
 //!
-//! Everything `grip` prints as a result goes through a [`Panel`]: a titled
-//! box with a fixed inner width, a key column, and a value column. Centralising
-//! the geometry here is what makes the report look designed rather than
-//! assembled — every panel in every mode shares one set of rules.
+//! `grip` reports have no boxes. A section is a titled gradient rule and its
+//! rows hang beneath a fixed key column; structure comes from indentation and
+//! color instead of borders, which keeps the report dense enough to read
+//! without scrolling.
+//!
+//! # No truncation
+//! Values are never cut. Long values — issuer DNs, SHA-256 fingerprints —
+//! wrap onto continuation lines aligned with the value column, so every byte
+//! of data the handshake produced reaches the terminal. Only the pcap table
+//! truncates, and only because a table's columns must stay aligned.
 //!
 //! # Alignment
 //! Padding is computed on **plain text**, then color is applied, because ANSI
-//! escapes have zero display width but non-zero byte length; `{:<width}` on a
-//! colored string pads by bytes and shears the right border. Values are
-//! truncated by `char`, not by byte, so multi-byte subjects in certificates
-//! cannot split a code point.
+//! escapes have zero display width but non-zero byte length; padding a
+//! colored string by bytes shears the layout. Values wrap by `char`, not by
+//! byte, so multi-byte subjects in certificates cannot split a code point.
 //!
 //! We deliberately assume single-width glyphs. The design uses only
 //! box-drawing and geometric characters (no emoji, which are double-width and
@@ -20,12 +25,21 @@ use std::fmt::Write;
 
 use crate::ui::theme::{Palette, Rgb, glyph, pal};
 
-/// Inner width of every panel, in columns (between the borders).
-pub const INNER: usize = 66;
+/// Narrowest render width, after clamping.
+pub const MIN_WIDTH: usize = 64;
+/// Widest render width, after clamping.
+pub const MAX_WIDTH: usize = 160;
+/// Width used when the terminal size is unknown (pipes, files, tests).
+pub const DEFAULT_WIDTH: usize = 100;
+
 /// Width of the key column.
 const KEY_W: usize = 16;
 /// Left margin for the whole report.
 const MARGIN: &str = "  ";
+/// Row indent: section titles sit at the margin, rows hang one step deeper.
+const KEY_COL: usize = 4;
+/// Column where values start.
+const VALUE_COL: usize = KEY_COL + KEY_W + 1;
 
 /// Emphasis for a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,13 +71,13 @@ impl Tone {
     }
 }
 
-/// A row inside a panel.
+/// A row inside a section.
 #[derive(Debug, Clone)]
 pub enum Row {
     /// `key   value` with an optional trailing annotation.
     Kv {
         /// Left column label.
-        key: &'static str,
+        key: String,
         /// Right column value.
         value: String,
         /// Emphasis for `value`.
@@ -71,18 +85,16 @@ pub enum Row {
         /// Dim text appended after the value (units, hints, matches).
         note: Option<String>,
     },
-    /// A full-width line of muted text, indented under the key column.
+    /// A full-width line of muted text, indented under the value column.
     Note(String),
-    /// A full-width separator.
-    Rule,
 }
 
 impl Row {
     /// Key/value row.
     #[must_use]
-    pub fn kv(key: &'static str, value: impl Into<String>) -> Self {
+    pub fn kv(key: impl Into<String>, value: impl Into<String>) -> Self {
         Self::Kv {
-            key,
+            key: key.into(),
             value: value.into(),
             tone: Tone::Plain,
             note: None,
@@ -91,9 +103,9 @@ impl Row {
 
     /// Key/value row with emphasis.
     #[must_use]
-    pub fn kv_tone(key: &'static str, value: impl Into<String>, tone: Tone) -> Self {
+    pub fn kv_tone(key: impl Into<String>, value: impl Into<String>, tone: Tone) -> Self {
         Self::Kv {
-            key,
+            key: key.into(),
             value: value.into(),
             tone,
             note: None,
@@ -108,9 +120,66 @@ impl Row {
         }
         self
     }
+
+    /// Render this row into `out`, wrapping long values instead of cutting
+    /// them. All padding is computed on plain text before color is applied.
+    fn push(&self, out: &mut Vec<String>, p: Palette, width: usize) {
+        match self {
+            Self::Kv {
+                key,
+                value,
+                tone,
+                note,
+            } => {
+                let avail = width.saturating_sub(VALUE_COL);
+                let key_pad = " ".repeat(KEY_W.saturating_sub(key.chars().count()));
+                let chunks = wrap(value, avail);
+
+                // Padding comes from the plain pieces (key pad, chunk length);
+                // color wraps them after the fact because ANSI has no width.
+                for (i, chunk) in chunks.iter().enumerate() {
+                    let line = if i == 0 {
+                        format!(
+                            "{MARGIN}{MARGIN}{}{key_pad} {}",
+                            p.dim(key, pal::MIST),
+                            p.paint(chunk, tone.rgb())
+                        )
+                    } else {
+                        format!("{}{}", " ".repeat(VALUE_COL), p.paint(chunk, tone.rgb()))
+                    };
+                    out.push(line);
+                }
+
+                // The note rides on the last value line when there is room,
+                // otherwise it gets a continuation line of its own.
+                if let Some(n) = note {
+                    let nl = n.chars().count();
+                    let fits = chunks
+                        .last()
+                        .is_some_and(|c| c.chars().count() + 2 + nl <= avail);
+                    if fits {
+                        if let Some(last) = out.last_mut() {
+                            let _ = write!(last, "  {}", p.dim(n, pal::STEEL));
+                        }
+                    } else {
+                        out.push(format!("{}{}", " ".repeat(VALUE_COL), p.dim(n, pal::STEEL)));
+                    }
+                }
+            }
+            Self::Note(text) => {
+                for chunk in wrap(text, width.saturating_sub(VALUE_COL)) {
+                    out.push(format!(
+                        "{}{}",
+                        " ".repeat(VALUE_COL),
+                        p.dim(&chunk, pal::MIST)
+                    ));
+                }
+            }
+        }
+    }
 }
 
-/// A titled box.
+/// A titled section.
 #[derive(Debug, Clone)]
 pub struct Panel {
     title: &'static str,
@@ -119,7 +188,7 @@ pub struct Panel {
 }
 
 impl Panel {
-    /// New panel with a cyan accent.
+    /// New section with a cyan accent.
     #[must_use]
     pub const fn new(title: &'static str) -> Self {
         Self {
@@ -129,7 +198,7 @@ impl Panel {
         }
     }
 
-    /// Override the accent used for the title and border gradient.
+    /// Override the accent used for the title and rule gradient.
     #[must_use]
     pub const fn accent(mut self, rgb: Rgb) -> Self {
         self.accent = rgb;
@@ -146,105 +215,130 @@ impl Panel {
     /// Append a row only when `value` is `Some`, so callers stay free of
     /// `if let` noise when assembling reports from optional fields.
     #[must_use]
-    pub fn row_opt(self, key: &'static str, value: Option<impl Into<String>>, tone: Tone) -> Self {
+    pub fn row_opt(
+        self,
+        key: impl Into<String>,
+        value: Option<impl Into<String>>,
+        tone: Tone,
+    ) -> Self {
         match value {
             Some(v) => self.row(Row::kv_tone(key, v, tone)),
             None => self,
         }
     }
 
-    /// Render to lines. Empty panels render nothing at all, which keeps the
-    /// report free of hollow boxes when a section has no data.
+    /// Render to lines: one `title ──────` header followed by the rows.
+    ///
+    /// Empty sections render nothing at all, which keeps the report free of
+    /// hollow headings when a section has no data.
     #[must_use]
-    pub fn render(&self, p: Palette) -> Vec<String> {
+    pub fn render(&self, p: Palette, width: usize) -> Vec<String> {
         if self.rows.is_empty() {
             return Vec::new();
         }
-        let mut out = Vec::with_capacity(self.rows.len() + 2);
-        out.push(self.top(p));
+        let mut out = Vec::with_capacity(self.rows.len() + 1);
+        out.push(self.header(p, width));
         for row in &self.rows {
-            out.push(line(row, p));
+            row.push(&mut out, p, width);
         }
-        out.push(self.bottom(p));
         out
     }
 
-    /// `╭─ title ─────╮` with a gradient rule fading from the accent to steel.
-    fn top(&self, p: Palette) -> String {
-        let label = format!(" {} ", self.title);
-        // 2 for the corners, 1 for the leading rule segment.
-        let fill = INNER.saturating_sub(label.chars().count() + 1);
-        format!(
-            "{MARGIN}{}{}{}{}{}",
-            p.paint(&glyph::TL.to_string(), self.accent),
-            p.paint(&glyph::H.to_string(), self.accent),
-            p.bold(&label, self.accent),
-            p.gradient(&glyph::H.to_string().repeat(fill), self.accent, pal::STEEL),
-            p.dim(&glyph::TR.to_string(), pal::STEEL)
-        )
-    }
-
-    fn bottom(&self, p: Palette) -> String {
-        format!(
-            "{MARGIN}{}{}{}",
-            p.dim(&glyph::BL.to_string(), pal::STEEL),
-            p.gradient(&glyph::H.to_string().repeat(INNER), pal::STEEL, self.accent),
-            p.paint(&glyph::BR.to_string(), self.accent)
-        )
+    /// `  title ──────` with a gradient rule fading from the accent to void.
+    fn header(&self, p: Palette, width: usize) -> String {
+        let rule_len = width.saturating_sub(MARGIN.len() + self.title.chars().count() + 1);
+        let head = p.bold(self.title, self.accent);
+        if rule_len == 0 {
+            return format!("{MARGIN}{head}");
+        }
+        let rule = p.gradient(
+            &glyph::H.to_string().repeat(rule_len),
+            self.accent,
+            pal::VOID,
+        );
+        format!("{MARGIN}{head} {rule}")
     }
 }
 
-fn line(row: &Row, p: Palette) -> String {
-    let (plain, painted) = match row {
-        Row::Kv {
-            key,
-            value,
-            tone,
-            note,
-        } => {
-            let avail = INNER.saturating_sub(2 + KEY_W + 1);
-            let note_len = note.as_ref().map_or(0, |n| n.chars().count() + 2);
-            let value = truncate(value, avail.saturating_sub(note_len));
+/// Split `s` into lines of at most `max` display columns.
+///
+/// Wraps on whitespace where possible and hard-splits words longer than a
+/// whole line (fingerprints and cipher names contain no spaces). Every
+/// character survives except runs of whitespace collapse at wrap points.
+#[must_use]
+pub fn wrap(s: &str, max: usize) -> Vec<String> {
+    if max == 0 {
+        return vec![s.to_string()];
+    }
+    if s.chars().count() <= max {
+        return vec![s.to_string()];
+    }
 
-            let mut plain = format!("  {key:<KEY_W$} {value}");
-            let mut painted = format!(
-                "  {}{} {}",
-                p.dim(key, pal::MIST),
-                " ".repeat(KEY_W.saturating_sub(key.chars().count())),
-                p.paint(&value, tone.rgb())
-            );
-            if let Some(n) = note {
-                let _ = write!(plain, "  {n}");
-                let _ = write!(painted, "  {}", p.dim(n, pal::STEEL));
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut cur_len = 0usize;
+
+    for word in s.split_whitespace() {
+        let mut rest = word;
+
+        if cur_len > 0 {
+            let wl = rest.chars().count();
+            if cur_len + 1 + wl <= max {
+                cur.push(' ');
+                cur.push_str(rest);
+                cur_len += 1 + wl;
+                continue;
             }
-            (plain, painted)
+            if wl > max {
+                // A word longer than a whole line fills the current line
+                // with its head, then hard-splits below.
+                let room = max.saturating_sub(cur_len + 1);
+                if room > 0 {
+                    let (head, tail) = split_at_char(rest, room);
+                    cur.push(' ');
+                    cur.push_str(head);
+                    rest = tail;
+                }
+            }
+            out.push(std::mem::take(&mut cur));
         }
-        Row::Note(text) => {
-            let avail = INNER.saturating_sub(2 + KEY_W + 1);
-            let text = truncate(text, avail);
-            let plain = format!("  {:<KEY_W$} {text}", "");
-            let painted = format!("  {:<KEY_W$} {}", "", p.dim(&text, pal::STEEL));
-            (plain, painted)
-        }
-        Row::Rule => {
-            let inner = glyph::H.to_string().repeat(INNER.saturating_sub(2));
-            let plain = format!(" {inner} ");
-            let painted = format!(" {} ", p.dim(&inner, pal::VOID));
-            (plain, painted)
-        }
-    };
 
-    // Pad from the plain width; the painted string carries invisible bytes.
-    let pad = INNER.saturating_sub(plain.chars().count());
-    format!(
-        "{MARGIN}{}{painted}{}{}",
-        p.dim(&glyph::V.to_string(), pal::STEEL),
-        " ".repeat(pad),
-        p.dim(&glyph::V.to_string(), pal::STEEL)
-    )
+        // `cur` is empty; `rest` may still be longer than one line.
+        if rest.chars().count() <= max {
+            cur.push_str(rest);
+            cur_len = rest.chars().count();
+            continue;
+        }
+        let mut chars = rest.chars();
+        loop {
+            let chunk: String = chars.by_ref().take(max).collect();
+            if chars.as_str().is_empty() {
+                cur_len = chunk.chars().count();
+                cur = chunk;
+                break;
+            }
+            out.push(chunk);
+        }
+    }
+
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Split at char index `at` (or at the end if shorter).
+fn split_at_char(s: &str, at: usize) -> (&str, &str) {
+    match s.char_indices().nth(at) {
+        Some((i, _)) => s.split_at(i),
+        None => (s, ""),
+    }
 }
 
 /// Truncate to `max` display columns, marking elision with `…`.
+///
+/// Only the pcap table uses this: its columns must stay aligned, and table
+/// cells are already short. Everything else wraps via [`wrap`].
 #[must_use]
 pub fn truncate(s: &str, max: usize) -> String {
     let n = s.chars().count();
@@ -259,51 +353,48 @@ pub fn truncate(s: &str, max: usize) -> String {
     out
 }
 
-/// The report header: wordmark, target, and a gradient rule.
+/// The report header: wordmark, mode, target, and a gradient rule.
 #[must_use]
-pub fn header(target: &str, mode: &str, p: Palette) -> Vec<String> {
-    let word = p.gradient("grip", pal::CYAN, pal::MAGENTA);
-    let head = format!(
+pub fn header(target: &str, mode: &str, p: Palette, width: usize) -> Vec<String> {
+    let head_plain = format!("grip  {}  {mode}  {}  {target}", glyph::DOT, glyph::DOT);
+    let mut line = format!(
         "{MARGIN}{}  {}  {}  {}",
-        p.bold(&word, pal::CHROME),
+        p.gradient("grip", pal::CYAN, pal::MAGENTA),
         p.dim(glyph::DOT, pal::STEEL),
         p.dim(mode, pal::MIST),
         p.bold(target, pal::CHROME)
     );
-    let rule = format!(
-        "{MARGIN}{}",
-        p.gradient(
-            &glyph::H.to_string().repeat(INNER + 2),
-            pal::CYAN,
-            pal::VOID
-        )
-    );
-    vec![head, rule]
+    let rule_len = width.saturating_sub(MARGIN.len() + head_plain.chars().count() + 1);
+    if rule_len > 0 {
+        let _ = write!(
+            line,
+            " {}",
+            p.gradient(&glyph::H.to_string().repeat(rule_len), pal::CYAN, pal::VOID)
+        );
+    }
+    vec![line]
 }
 
 /// The report footer: the grip mark, elapsed time, and a closing note.
+///
+/// Renders nothing when there is nothing to say — a footer with neither
+/// timing nor a note is just noise at the bottom of the screen.
 #[must_use]
 pub fn footer(elapsed_ms: u128, note: &str, p: Palette) -> Vec<String> {
-    let rule = format!(
-        "{MARGIN}{}",
-        p.gradient(
-            &glyph::H.to_string().repeat(INNER + 2),
-            pal::VOID,
-            pal::MAGENTA
-        )
-    );
-    let sig = p.bold(crate::ui::mascot::MARK, pal::LIME);
-    let timing = if elapsed_ms > 0 {
-        format!("{elapsed_ms} ms  {}  ", glyph::DOT)
-    } else {
-        String::new()
-    };
-    let line = format!(
-        "{MARGIN}{sig}  {}{}",
-        p.dim(&timing, pal::MIST),
-        p.dim(note, pal::STEEL)
-    );
-    vec![rule, line]
+    if elapsed_ms == 0 && note.is_empty() {
+        return Vec::new();
+    }
+    let mut line = format!("{MARGIN}{}", p.bold(crate::ui::mascot::MARK, pal::LIME));
+    if elapsed_ms > 0 {
+        let _ = write!(line, "  {}", p.dim(&format!("{elapsed_ms} ms"), pal::MIST));
+    }
+    if !note.is_empty() {
+        if elapsed_ms > 0 {
+            let _ = write!(line, "  {}", p.dim(glyph::DOT, pal::STEEL));
+        }
+        let _ = write!(line, "  {}", p.dim(note, pal::STEEL));
+    }
+    vec![line]
 }
 
 #[cfg(test)]
@@ -312,83 +403,6 @@ mod tests {
 
     fn width_of(line: &str) -> usize {
         line.chars().count()
-    }
-
-    #[test]
-    fn plain_panel_borders_align() {
-        let panel = Panel::new("negotiated")
-            .row(Row::kv("tls version", "TLS 1.3"))
-            .row(Row::kv_tone("cipher", "TLS_AES_128_GCM_SHA256", Tone::Key).note("0x1301"))
-            .row(Row::Rule)
-            .row(Row::Note("supporting detail".to_string()));
-        let lines = panel.render(Palette::plain());
-        let expected = width_of(&lines[0]);
-        for l in &lines {
-            assert_eq!(width_of(l), expected, "line misaligned: {l:?}");
-            assert!(!l.contains('\x1b'));
-        }
-    }
-
-    #[test]
-    fn colored_panel_has_same_visible_width_as_plain() {
-        let build = || {
-            Panel::new("certificate")
-                .row(Row::kv("subject", "CN=example.com"))
-                .row(Row::kv_tone("expires", "2026-11-15", Tone::Good).note("77 days"))
-        };
-        let plain = build().render(Palette::plain());
-        let rich = build().render(Palette::rich());
-        assert_eq!(plain.len(), rich.len());
-        for (a, b) in plain.iter().zip(rich.iter()) {
-            assert_eq!(width_of(a), width_of(&strip(b)), "visible width drift");
-        }
-    }
-
-    #[test]
-    fn empty_panel_renders_nothing() {
-        assert!(Panel::new("x").render(Palette::plain()).is_empty());
-    }
-
-    #[test]
-    fn row_opt_skips_none() {
-        let p = Panel::new("x")
-            .row_opt("a", Some("1"), Tone::Plain)
-            .row_opt("b", None::<String>, Tone::Plain);
-        // 1 row + 2 borders
-        assert_eq!(p.render(Palette::plain()).len(), 3);
-    }
-
-    #[test]
-    fn long_values_are_truncated_not_wrapped() {
-        let long = "x".repeat(400);
-        let lines = Panel::new("t")
-            .row(Row::kv("k", long))
-            .render(Palette::plain());
-        assert_eq!(lines.len(), 3);
-        assert_eq!(width_of(&lines[1]), width_of(&lines[0]));
-        assert!(lines[1].contains('…'));
-    }
-
-    #[test]
-    fn truncate_is_char_safe() {
-        // Multi-byte input must not be split mid code point.
-        let s = "ünïcødé-subject-name";
-        let t = truncate(s, 6);
-        assert_eq!(t.chars().count(), 6);
-        assert!(t.ends_with('…'));
-        assert_eq!(truncate("abc", 10), "abc");
-        assert_eq!(truncate("abc", 0), "");
-    }
-
-    #[test]
-    fn header_and_footer_shapes() {
-        let h = header("example.com:443", "live", Palette::plain());
-        assert_eq!(h.len(), 2);
-        assert!(h[0].contains("grip"));
-        assert!(h[0].contains("example.com:443"));
-        let f = footer(42, "1 cert", Palette::plain());
-        assert_eq!(f.len(), 2);
-        assert!(f[1].contains("42 ms"));
     }
 
     fn strip(s: &str) -> String {
@@ -406,5 +420,138 @@ mod tests {
             }
         }
         out
+    }
+
+    fn sample(width: usize) -> Vec<String> {
+        Panel::new("negotiated")
+            .row(Row::kv("tls version", "TLS 1.3"))
+            .row(Row::kv_tone("cipher", "TLS_AES_128_GCM_SHA256", Tone::Key).note("0x1301"))
+            .row(Row::Note(
+                "a supporting note that is long enough to wrap over lines".to_string(),
+            ))
+            .render(Palette::plain(), width)
+    }
+
+    #[test]
+    fn section_header_precedes_rows_and_stays_in_width() {
+        let width = 60;
+        let lines = sample(width);
+        assert!(lines[0].trim_start().starts_with("negotiated"));
+        assert!(lines[0].contains('─'), "header carries a rule");
+        for l in &lines {
+            assert!(width_of(l) <= width, "line exceeds width: {l:?}");
+            assert!(!l.contains('\x1b'));
+        }
+    }
+
+    #[test]
+    fn colored_has_same_visible_width_as_plain() {
+        let build = || {
+            Panel::new("certificate")
+                .row(Row::kv("subject", "CN=example.com"))
+                .row(Row::kv_tone("expires", "2026-11-15", Tone::Good).note("77 days"))
+        };
+        let plain = build().render(Palette::plain(), 80);
+        let rich = build().render(Palette::rich(), 80);
+        assert_eq!(plain.len(), rich.len());
+        for (a, b) in plain.iter().zip(rich.iter()) {
+            assert_eq!(width_of(a), width_of(&strip(b)), "visible width drift");
+        }
+    }
+
+    #[test]
+    fn empty_panel_renders_nothing() {
+        assert!(Panel::new("x").render(Palette::plain(), 80).is_empty());
+    }
+
+    #[test]
+    fn row_opt_skips_none() {
+        let p = Panel::new("x")
+            .row_opt("a", Some("1"), Tone::Plain)
+            .row_opt("b", None::<String>, Tone::Plain);
+        // header + 1 row
+        assert_eq!(p.render(Palette::plain(), 80).len(), 2);
+    }
+
+    #[test]
+    fn long_values_wrap_not_truncate() {
+        let long = "x".repeat(400);
+        let lines = Panel::new("t")
+            .row(Row::kv("k", long))
+            .render(Palette::plain(), 60);
+        assert!(lines.len() > 3, "value must spill to continuation lines");
+        assert!(!lines.iter().any(|l| l.contains('…')), "no truncation");
+        let body: String = lines.iter().skip(1).cloned().collect();
+        assert_eq!(body.matches('x').count(), 400, "every char survives");
+        for l in &lines {
+            assert!(width_of(l) <= 60, "line exceeds width: {l:?}");
+        }
+    }
+
+    #[test]
+    fn notes_attach_or_wrap_without_loss() {
+        let lines = Panel::new("t")
+            .row(Row::kv_tone("sni", "example.com", Tone::Plain).note("hostname"))
+            .render(Palette::plain(), 80);
+        assert!(lines[1].ends_with("hostname"));
+
+        let long_note = "n".repeat(200);
+        let lines = Panel::new("t")
+            .row(Row::kv("k", "v").note(long_note))
+            .render(Palette::plain(), 50);
+        let joined: String = lines.iter().skip(1).cloned().collect();
+        assert_eq!(joined.matches('n').count(), 200, "note survives");
+    }
+
+    #[test]
+    fn wrap_respects_max_and_preserves_words() {
+        fn words(t: &str) -> Vec<&str> {
+            t.split_whitespace().collect()
+        }
+        let s = "C=US, O=SSL Corporation, CN=Cloudflare TLS Issuing ECC Intermediate CA - G3";
+        let lines = wrap(s, 40);
+        for l in &lines {
+            assert!(l.chars().count() <= 40, "line too long: {l:?}");
+        }
+        let joined = lines.join(" ");
+        assert_eq!(words(&joined), words(s));
+    }
+
+    #[test]
+    fn wrap_hard_splits_words_longer_than_a_line() {
+        let hex = "ab".repeat(64);
+        let lines = wrap(&hex, 30);
+        assert!(lines.iter().all(|l| l.chars().count() <= 30));
+        assert_eq!(lines.concat(), hex);
+        assert_eq!(wrap("short", 30), vec!["short".to_string()]);
+    }
+
+    #[test]
+    fn truncate_is_char_safe() {
+        // Multi-byte input must not be split mid code point.
+        let s = "ünïcødé-subject-name";
+        let t = truncate(s, 6);
+        assert_eq!(t.chars().count(), 6);
+        assert!(t.ends_with('…'));
+        assert_eq!(truncate("abc", 10), "abc");
+        assert_eq!(truncate("abc", 0), "");
+    }
+
+    #[test]
+    fn header_is_a_single_line() {
+        let h = header("example.com:443", "live handshake", Palette::plain(), 80);
+        assert_eq!(h.len(), 1);
+        assert!(h[0].contains("grip"));
+        assert!(h[0].contains("example.com:443"));
+        assert!(width_of(&h[0]) <= 80);
+    }
+
+    #[test]
+    fn footer_is_absent_when_empty_and_shows_data_when_not() {
+        assert!(footer(0, "", Palette::plain()).is_empty());
+        let f = footer(42, "3 unique fingerprints", Palette::plain());
+        assert_eq!(f.len(), 1);
+        assert!(f[0].contains("42 ms"));
+        assert!(f[0].contains("3 unique fingerprints"));
     }
 }
