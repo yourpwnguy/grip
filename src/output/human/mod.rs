@@ -1,4 +1,4 @@
-//! Human report rendering — composes [`crate::ui::panel`] boxes.
+//! Human report rendering — composes [`crate::ui::panel`] sections.
 //!
 //! The report is split by mode so each pipeline owns only the view it
 //! renders. `live.rs` and `pcap.rs` take DTOs, never domain types, so every
@@ -17,6 +17,7 @@ pub use quiet::render_quiet;
 mod tests {
     use super::*;
     use crate::output::model::*;
+    use crate::ui::panel::DEFAULT_WIDTH;
     use crate::ui::theme::Palette;
 
     fn live_report() -> LiveReport {
@@ -48,9 +49,9 @@ mod tests {
             cert_chain: None,
             fingerprints: Fingerprints {
                 ja3: Some("cd08e31494f9531f560d64c695473da9".to_string()),
-                ja4: Some("t13d1516h2_8daaf6152771_e5627ecdbbe6".to_string()),
+                ja4: Some("t13d1516h2_8daaf6152771_02713d6af862".to_string()),
                 ja4s: Some("t13d020000_1301_1acd28cc39f1".to_string()),
-                lookup: Some("Chrome 120".to_string()),
+                lookup: Some("Chromium Browser".to_string()),
             },
             raw: None,
             verbose_info: None,
@@ -59,7 +60,7 @@ mod tests {
 
     fn out_live(r: &LiveReport) -> String {
         let mut b = Vec::new();
-        render_live(r, &mut b, Palette::plain()).unwrap();
+        render_live(r, &mut b, Palette::plain(), DEFAULT_WIDTH).unwrap();
         String::from_utf8(b).unwrap()
     }
 
@@ -69,8 +70,8 @@ mod tests {
         assert!(!s.contains('\x1b'));
         assert!(s.contains("negotiated"));
         assert!(s.contains("TLS_AES_128_GCM_SHA256"));
-        assert!(s.contains("t13d1516h2_8daaf6152771_e5627ecdbbe6"));
-        assert!(s.contains("matches Chrome 120"));
+        assert!(s.contains("t13d1516h2_8daaf6152771_02713d6af862"));
+        assert!(s.contains("Chromium Browser"));
         assert!(s.contains("+1 more"));
         insta::assert_snapshot!(s);
     }
@@ -107,17 +108,32 @@ mod tests {
             grease_filtered: 2,
         });
         let s = out_live(&r);
-        assert!(s.contains("chain of trust"));
-        assert!(s.contains("depth 1"));
+        assert!(s.contains("chain 1"));
         assert!(s.contains("telemetry"));
         assert!(s.contains("42 ms"));
         insta::assert_snapshot!(s);
     }
 
     #[test]
+    fn client_row_omitted_without_lookup() {
+        let mut r = live_report();
+        r.fingerprints.lookup = None;
+        let s = out_live(&r);
+        assert!(!s.contains("client"));
+    }
+
+    #[test]
+    fn requested_miss_renders_muted_unclassified() {
+        let mut r = live_report();
+        r.fingerprints.lookup = Some(crate::output::model::UNCLASSIFIED.to_string());
+        let s = out_live(&r);
+        assert!(s.contains("unclassified"));
+    }
+
+    #[test]
     fn colored_live_report_carries_ansi() {
         let mut b = Vec::new();
-        render_live(&live_report(), &mut b, Palette::rich()).unwrap();
+        render_live(&live_report(), &mut b, Palette::rich(), DEFAULT_WIDTH).unwrap();
         assert!(String::from_utf8(b).unwrap().contains('\x1b'));
     }
 
@@ -136,32 +152,46 @@ mod tests {
         let r = pcap_report(vec![
             ClientEntry {
                 ip: "192.168.1.5".to_string(),
-                ja4: "t13d1516h2_8daaf6152771_e5627ecdbbe6".to_string(),
+                ja4: "t13d1516h2_8daaf6152771_02713d6af862".to_string(),
                 ja3: None,
-                client: Some("Chrome 120".to_string()),
+                client: Some("Chromium Browser".to_string()),
                 count: 23,
             },
             ClientEntry {
                 ip: "10.0.0.42".to_string(),
                 ja4: "t10d1200h_c013c014c00a_a2a4a5a6a7a8".to_string(),
                 ja3: None,
-                client: None,
+                client: Some(crate::output::model::UNCLASSIFIED.to_string()),
                 count: 6,
+            },
+            ClientEntry {
+                ip: "10.0.0.7".to_string(),
+                ja4: "t13d1305h2_bda08f0cbb17_c83d862dc2aa".to_string(),
+                ja3: None,
+                client: None,
+                count: 2,
             },
         ]);
         let mut b = Vec::new();
-        render_pcap(&r, &mut b, Palette::plain()).unwrap();
+        render_pcap(&r, &mut b, Palette::plain(), DEFAULT_WIDTH).unwrap();
         let s = String::from_utf8(b).unwrap();
         assert!(!s.contains('\x1b'));
         assert!(s.contains(" 1 "));
         assert!(s.contains("unclassified"));
+        assert!(s.contains("—"));
         insta::assert_snapshot!(s);
     }
 
     #[test]
     fn empty_pcap_gives_guidance() {
         let mut b = Vec::new();
-        render_pcap(&pcap_report(vec![]), &mut b, Palette::plain()).unwrap();
+        render_pcap(
+            &pcap_report(vec![]),
+            &mut b,
+            Palette::plain(),
+            DEFAULT_WIDTH,
+        )
+        .unwrap();
         let s = String::from_utf8(b).unwrap();
         assert!(s.contains("no client hellos recovered"));
     }
