@@ -3,6 +3,10 @@
 //! Reads `assets/fingerprints.csv` (if present) and emits `$OUT_DIR/known_db.rs`
 //! containing two `phf::Map`s: `JA3_MAP` and `JA4_MAP`. Duplicate JA4 entries
 //! cause a build failure so the DB stays consistent.
+//!
+//! The CSV is a snapshot of `FoxIO`'s `ja4plus-mapping.csv` plus grip's own
+//! probe fingerprints; refresh it with `just update-db` (see
+//! `scripts/import_ja4_mapping.py`).
 
 use std::env;
 use std::fs::File;
