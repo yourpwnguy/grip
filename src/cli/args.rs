@@ -94,13 +94,9 @@ pub struct Cli {
     pub sort_by: SortBy,
 
     // ── Verbosity / UI ──
-    /// Verbose output — show live progress, timings, and transparency
+    /// Verbose output — show dns, timing, and certificate detail on stderr
     #[arg(long, short, action = clap::ArgAction::Count)]
     pub verbose: u8,
-
-    /// Disable cute progress animations
-    #[arg(long)]
-    pub no_progress: bool,
 }
 
 /// Output format.
