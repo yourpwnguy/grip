@@ -10,31 +10,6 @@ use crate::output::model::{CertSummary, LiveReport};
 use crate::tls::{CertInfo, Extension};
 use crate::ui::theme::Palette;
 
-/// Live checklist steps, in execution order. Indices are used with the
-/// [`Stage`] API and with the progress bridge in `live.rs`, so the two must
-/// agree.
-pub const LIVE_STEPS: [&str; 6] = [
-    "resolve",
-    "connect",
-    "send",
-    "receive",
-    "fingerprint",
-    "certificate",
-];
-
-/// Pcap checklist steps.
-pub const PCAP_STEPS: [&str; 4] = ["read", "reassemble", "extract", "rank"];
-
-/// Whether the animated stage may run.
-///
-/// Requires human output, no `--quiet`, no `--no-progress`, and an
-/// interactive stderr — otherwise frames would corrupt logs or pipes.
-pub fn should_animate(cli: &crate::cli::args::Cli) -> bool {
-    use crate::cli::args::Format;
-    use std::io::IsTerminal;
-    !cli.quiet && !cli.no_progress && cli.format == Format::Human && std::io::stderr().is_terminal()
-}
-
 /// Palette for the report on stdout.
 ///
 /// When `-o file` is given the report is a file, so color is suppressed to
@@ -44,6 +19,25 @@ pub fn report_palette(cli: &crate::cli::args::Cli) -> Palette {
         return Palette::plain();
     }
     Palette::detect(std::io::stdout().is_terminal())
+}
+
+/// Render width for the human report.
+///
+/// `COLUMNS` wins when set (explicit override, handy in scripts and CI), then
+/// the real terminal width, then [`crate::ui::panel::DEFAULT_WIDTH`]. Clamped
+/// so a hostile or silly value cannot collapse the layout. File output is
+/// deterministic: it always uses the default.
+pub fn report_width(cli: &crate::cli::args::Cli) -> usize {
+    use crate::ui::panel::{DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH};
+    if cli.output.is_some() {
+        return DEFAULT_WIDTH;
+    }
+    let w = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|c| c.trim().parse::<usize>().ok())
+        .or_else(|| terminal_size::terminal_size().map(|(cols, _)| usize::from(cols.0)))
+        .unwrap_or(DEFAULT_WIDTH);
+    w.clamp(MIN_WIDTH, MAX_WIDTH)
 }
 
 /// Split a `host:port` target, falling back to `default_port`.
@@ -95,7 +89,11 @@ pub fn summarise_cert(c: &CertInfo) -> CertSummary {
         expires: Some(crate::util::time::format_expiry(c.not_after)),
         sha256: Some(c.sha256_fingerprint.clone()),
         ct_logs: Some(if c.sct_count > 0 {
-            format!("{} scts embedded", c.sct_count)
+            format!(
+                "{} sct{} embedded",
+                c.sct_count,
+                if c.sct_count == 1 { "" } else { "s" }
+            )
         } else {
             "none".to_string()
         }),
@@ -213,10 +211,12 @@ pub fn build_live_report(
     let ja3 = show_ja3.then(|| crate::fp::compute_ja3(&probe.client_hello));
     let ja4 = show_ja4.then(|| crate::fp::compute_ja4(&probe.client_hello).to_string());
     let ja4s = show_ja4s.then(|| crate::fp::compute_ja4s(&probe.server_hello).to_string());
-    let lookup = cli
-        .lookup
-        .then(|| crate::fp::lookup::lookup(ja4.as_deref(), ja3.as_deref()).map(str::to_string))
-        .flatten();
+    let lookup = cli.lookup.then(|| {
+        crate::fp::lookup::lookup(ja4.as_deref(), ja3.as_deref()).map_or_else(
+            || crate::output::model::UNCLASSIFIED.to_string(),
+            str::to_string,
+        )
+    });
 
     let (target, port) = parse_target_and_port(&endpoint, 443);
     let cert_chain = cli
