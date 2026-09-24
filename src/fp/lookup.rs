@@ -37,12 +37,32 @@ pub fn lookup(ja4: Option<&str>, ja3: Option<&str>) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fp::{compute_ja3, compute_ja4};
+    use crate::tls::{ClientHello, ClientHelloBuilder};
 
     #[test]
-    fn known_chrome() {
-        // From assets/fingerprints.csv
-        let ja4 = "t13d1516h2_8daaf6152771_e5627ecdbbe6";
-        assert_eq!(lookup_ja4(ja4), Some("Chrome 120"));
+    fn known_chromium() {
+        // From assets/fingerprints.csv (FoxIO ja4plus-mapping snapshot).
+        let ja4 = "t13d1516h2_8daaf6152771_02713d6af862";
+        assert_eq!(lookup_ja4(ja4), Some("Chromium Browser"));
+    }
+
+    /// grip's own probe hello must self-identify, so live `--lookup`
+    /// reports `grip` instead of a miss.
+    #[test]
+    fn grip_self_identifies_with_and_without_sni() {
+        for sni in [Some("example.com".to_string()), None] {
+            let raw = ClientHelloBuilder::new().with_sni(sni).build();
+            let ch = ClientHello::parse(&raw).unwrap();
+            let ja4 = compute_ja4(&ch).to_string();
+            let ja3 = compute_ja3(&ch);
+            assert_eq!(lookup_ja4(&ja4), Some("grip"), "ja4 {ja4}");
+            assert_eq!(
+                lookup(Some(ja4.as_str()), Some(ja3.as_str())),
+                Some("grip"),
+                "ja4 {ja4}"
+            );
+        }
     }
 
     #[test]
