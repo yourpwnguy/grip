@@ -77,7 +77,7 @@ grip/
     ├── output/               # ── PRESENTATION (depends on domain, not vice versa) ──
     │   ├── mod.rs            # Report types + Renderer trait
     │   ├── model.rs          # LiveReport, PcapReport, ClientEntry (Serialize)
-    │   ├── human.rs          # pretty terminal (box drawing, colors)
+    │   ├── human.rs          # pretty terminal (sections, wrapping, colors)
     │   ├── json.rs           # JSON serialization
     │   ├── hex.rs            # hex dump formatting
     │   └── writer.rs         # OutputWriter: stdout vs file, --quiet
@@ -182,7 +182,7 @@ All fingerprint types are newtypes (`struct Ja4(String)`) with `Display`, `AsRef
 | File | Responsibility |
 |---|---|
 | `model.rs` | Serializable DTOs: `LiveReport { target, negotiated, certificate, fingerprints: Fingerprints, raw: Option<RawHex> }`, `PcapReport { file, total_handshakes, unique_clients, clients: Vec<ClientEntry> }`, `ClientEntry { ip, ja4, client_name, count }`. All `#[derive(Serialize)]`. |
-| `human.rs` | `fn render_live(report: &LiveReport, w: &mut dyn Write)`, `fn render_pcap(report: &PcapReport, sort: SortBy, w: &mut dyn Write)`. Box-drawing via `unicode-width`, colors via `anstream`/`owo-colors` with `NO_COLOR` and `is_terminal` checks. No business logic — pure formatting. |
+| `human.rs` | `fn render_live(report: &LiveReport, w: &mut dyn Write, p: Palette, width: usize)`, `fn render_pcap(report: &PcapReport, w: &mut dyn Write, p: Palette, width: usize)`. Titled sections and key/value rows via `ui::panel`, truecolor via `ui::theme::Palette` with `NO_COLOR`/`FORCE_COLOR`/`is_terminal` checks. Long values wrap, never truncate. No business logic — pure formatting. |
 | `json.rs` | `fn render_json<T: Serialize>(v: &T, w: &mut dyn Write) -> GripResult<()>` using `serde_json::to_writer_pretty`. |
 | `hex.rs` | `fn hexdump(data: &[u8], w: &mut dyn Write)` — `0000  16 03 01 …` with ASCII gutter, like `idea.md` raw mode. |
 | `writer.rs` | `enum OutputWriter { Stdout, File(File) }` + `fn writer_for(path: Option<&Path>) -> Box<dyn Write>`; handles `--quiet` (only fingerprint) and `anstream::AutoStream` wrapping. |
@@ -535,7 +535,7 @@ md5 = "0.7"            # MD5 for JA3 only
 x509-parser = "0.16"   # cert parsing, no hand-rolled ASN.1
 phf = { version = "0.11", features = ["macros"] }
 anstream = "0.6"       # auto color + NO_COLOR
-owo-colors = "4"       # optional, for human.rs boxes
+owo-colors = "4"       # optional, for human.rs colors
 chrono = "0.4"         # expiry formatting
 
 [build-dependencies]
