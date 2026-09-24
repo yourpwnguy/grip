@@ -1,7 +1,7 @@
 //! Presentation layer — DTOs + renderers.
 //!
-//! The only place that knows about `anstream`, `serde_json`, or box-drawing.
-//! Core never imports this.
+//! The only place that knows about `anstream`, `serde_json`, or terminal
+//! layout. Core never imports this.
 
 pub mod hex;
 pub mod human;
