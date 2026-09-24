@@ -1,5 +1,5 @@
 //! CLI orchestration — the single place that sees `cli`, `net`, `pcap` and `ui`
-//! together. Domain stays pure; this layer owns the stage.
+//! together. Domain stays pure; this layer owns the two pipelines.
 
 mod helpers;
 mod live;
@@ -10,8 +10,6 @@ use std::io::Write;
 use crate::cli::args::Cli;
 use crate::cli::validate::{Mode, validate};
 use crate::error::{GripError, GripResult};
-
-pub use helpers::{LIVE_STEPS, PCAP_STEPS};
 
 /// Run the CLI.
 ///
