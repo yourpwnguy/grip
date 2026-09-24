@@ -80,6 +80,12 @@ run-json:
 run-pcap:
     cargo run -- --pcap capture.pcap
 
+# ── Fingerprint DB ───────────────────────────────────────────────────────
+
+# Refresh assets/fingerprints.csv from FoxIO's ja4plus-mapping (then rebuild)
+update-db:
+    python3 scripts/import_ja4_mapping.py
+
 # ── Misc ─────────────────────────────────────────────────────────────────────
 
 # Show project statistics
