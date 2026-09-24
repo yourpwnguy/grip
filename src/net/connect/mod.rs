@@ -10,12 +10,9 @@
 //! - Pure `tls` parsers are the source of truth for fingerprinting.
 //! - I/O is synchronous `std::net` with short poll timeouts, so a quiet peer
 //!   does not burn the full budget.
-//! - Progress is reported via a trait, so the `ui` crate can animate without
-//!   the `net` crate depending on it.
 
 mod cert_fetch;
 mod dial;
-mod progress;
 mod raw;
 
 use std::time::Duration;
@@ -27,7 +24,6 @@ use crate::tls::client_hello::ClientHello;
 use crate::tls::server_hello::ServerHello;
 
 pub use dial::resolve_target;
-pub use progress::{NoProgress, Progress};
 
 /// Result of a live probe.
 #[derive(Debug)]
@@ -48,7 +44,7 @@ pub struct ProbeResult {
 
 /// Probe `target:port` with the default `ClientHello`.
 ///
-/// See [`probe_with_verify`] for the `insecure` and `progress` variants.
+/// See [`probe_with_verify`] for the `insecure` variant.
 ///
 /// # Errors
 ///
@@ -61,13 +57,12 @@ pub fn probe(
     sni: Option<&str>,
     timeout_s: u64,
 ) -> GripResult<ProbeResult> {
-    probe_with_verify(target, port, sni, timeout_s, false, &NoProgress)
+    probe_with_verify(target, port, sni, timeout_s, false)
 }
 
-/// Probe with explicit verification and progress.
+/// Probe with explicit certificate verification.
 ///
 /// `insecure` disables cert verification in the `rustls` fallback.
-/// `progress` receives events as each stage completes.
 ///
 /// # Errors
 ///
@@ -81,7 +76,6 @@ pub fn probe_with_verify(
     sni_override: Option<&str>,
     timeout_s: u64,
     insecure: bool,
-    progress: &dyn Progress,
 ) -> GripResult<ProbeResult> {
     let timeout = Duration::from_secs(timeout_s);
     let sni = sni_override.map(str::to_string).or_else(|| {
@@ -99,13 +93,7 @@ pub fn probe_with_verify(
         .map_err(|e| GripError::Other(format!("self ClientHello parse: {e}")))?;
 
     let addrs = dial::resolve_target(target, port)?;
-    if let Some(first) = addrs.first() {
-        progress.resolved(*first);
-    }
     let mut stream = dial::dial(&addrs, timeout, target, port)?;
-    if let Ok(addr) = stream.peer_addr() {
-        progress.connected(addr);
-    }
 
     // Short poll avoids burning the full timeout when the peer is done.
     let poll = timeout.min(Duration::from_millis(400));
@@ -114,7 +102,7 @@ pub fn probe_with_verify(
         .set_write_timeout(Some(timeout))
         .map_err(GripError::Io)?;
 
-    let raw = raw::drive(&mut stream, &client_hello_raw, timeout, poll, progress)?;
+    let raw = raw::drive(&mut stream, &client_hello_raw, timeout, poll)?;
     let server_hello = raw.server_hello.ok_or_else(|| {
         if raw.buf.is_empty() {
             GripError::Network(format!("no data from {target}:{port}"))
@@ -133,20 +121,13 @@ pub fn probe_with_verify(
 
     // Prefer the raw chain; otherwise try rustls (TLS 1.3 encrypts it).
     let mut cert_chain = raw.cert_chain;
-    if cert_chain.is_some() {
-        progress.fetching_cert(false);
-    }
     if cert_chain.is_none() {
-        progress.fetching_cert(true);
         let budget = timeout.min(Duration::from_secs(5));
         if let Some(chain) =
             cert_fetch::fetch_via_rustls(target, port, sni.as_deref(), budget, insecure)
         {
             cert_chain = Some(chain);
         }
-    }
-    if let Some(c) = &cert_chain {
-        progress.cert(c.len());
     }
 
     Ok(ProbeResult {
