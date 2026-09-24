@@ -107,7 +107,6 @@ mod tests {
             unique: false,
             sort_by: SortBy::Count,
             verbose: 0,
-            no_progress: false,
         }
     }
 
