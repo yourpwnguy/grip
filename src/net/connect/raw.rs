@@ -32,7 +32,6 @@ pub fn drive(
     client_hello_raw: &[u8],
     timeout: Duration,
     _poll: Duration,
-    progress: &dyn super::progress::Progress,
 ) -> GripResult<RawOutcome> {
     use crate::error::GripError;
 
@@ -68,7 +67,6 @@ pub fn drive(
                         match rec.payload[0] {
                             0x02 if server_hello.is_none() => {
                                 if let Ok(sh) = ServerHello::parse(rec_bytes) {
-                                    progress.server_hello(sh.real_version(), sh.cipher_suite);
                                     server_hello_raw = rec_bytes.to_vec();
                                     server_hello = Some(sh);
                                 }
