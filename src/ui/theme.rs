@@ -1,4 +1,4 @@
-//! Design system — truecolor palette, gradients, glyphs, box drawing.
+//! Design system — truecolor palette, gradients, glyphs.
 //!
 //! `grip` = a mechanical claw closing on a handshake. The palette is built
 //! from that idea: cold hydraulic steel (slate/cyan) for structure, hot
@@ -187,22 +187,8 @@ impl Palette {
 
 /// Box drawing and marker glyphs. No emoji, no kaomoji — only geometry.
 pub mod glyph {
-    /// Top-left corner.
-    pub const TL: char = '╭';
-    /// Top-right corner.
-    pub const TR: char = '╮';
-    /// Bottom-left corner.
-    pub const BL: char = '╰';
-    /// Bottom-right corner.
-    pub const BR: char = '╯';
-    /// Horizontal rule.
+    /// Horizontal rule — section titles, header rules, table rules.
     pub const H: char = '─';
-    /// Vertical rule.
-    pub const V: char = '│';
-    /// Left tee.
-    pub const TEE_L: char = '├';
-    /// Right tee.
-    pub const TEE_R: char = '┤';
     /// Step marker: done.
     pub const DONE: &str = "▰";
     /// Step marker: pending.
