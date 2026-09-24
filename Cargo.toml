@@ -34,6 +34,7 @@ hex = "0.4"
 digest = "0.10"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 webpki-roots = "0.26"
+terminal_size = "0.4"
 
 [build-dependencies]
 phf_codegen = "0.11"
