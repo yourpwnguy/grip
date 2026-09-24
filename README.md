@@ -165,6 +165,17 @@ extra telemetry: handshake timing, bytes sent and received, resolved IPs, GREASE
 grip --verbose example.com
 ```
 
+### identify known clients
+
+match fingerprints against the built-in database (FoxIO JA4 mapping plus grip's own probe):
+
+```bash
+grip --lookup example.com
+grip --pcap capture.pcap --lookup
+```
+
+in live mode the client is the probe itself, so this reports `grip`. in pcap mode it names observed clients (Chromium, Python, Go, known malware) or `unclassified` on a miss. without the flag the row is hidden in live mode and shows `—` in pcap tables.
+
 ### filter pcap by IP
 
 ```bash
@@ -193,93 +204,73 @@ grip --pcap capture.pcap --sort-by fingerprint
 
 ```
 $ grip example.com
+  grip  ·  live handshake  example.com:443 ──────────────────────────────────────────────────────
 
-  grip  ·  live handshake  example.com:443
-  ────────────────────────────────────────────────────────────────────
+  negotiated ───────────────────────────────────────────────────────────────────────────────────────
+    tls version      TLS 1.3
+    cipher suite     TLS_AES_128_GCM_SHA256  0x1301
+    key exchange     X25519
+    sni              example.com  hostname
+    offered          TLS 1.3 · TLS 1.2
 
-  ╭─ negotiated ─────────────────────────────────────────────────────╮
-  │  tls version      TLS 1.3                                        │
-  │  cipher suite     TLS_AES_128_GCM_SHA256  0x1301                 │
-  │  key exchange     X25519                                         │
-  │  sni              example.com  hostname                          │
-  │  offered          TLS 1.3 · TLS 1.2                              │
-  ╰──────────────────────────────────────────────────────────────────╯
+  certificate ──────────────────────────────────────────────────────────────────────────────────────
+    subject          CN=example.com
+    issuer           C=US, O=SSL Corporation, CN=Cloudflare TLS Issuing ECC CA 3
+    sans             example.com  *.example.com
+    expires          2026-10-27   (34 days)
+    sha-256          6153a96fd1a6ab7f4d438fc34932484299d0729d9140b3a126bb2f9c07b02200
+    ct logs          1 sct embedded
 
-  ╭─ certificate ────────────────────────────────────────────────────╮
-  │  subject          CN=example.com                                 │
-  │  issuer           C=US, O=SSL Corporation, CN=Cloudflare TLS Iss…│
-  │  sans             example.com  *.example.com                     │
-  │  expires          2026-10-27   (52 days)                         │
-  │  sha-256          61:53:a9:6f:d1:a6:ab:7f:4d:43:8f:c3:49:32:48:4…│
-  │  ct logs          1 scts embedded                                │
-  ╰──────────────────────────────────────────────────────────────────╯
-
-  ╭─ fingerprints ───────────────────────────────────────────────────╮
-  │  ja3              d879bc8777862a634eecc81a0d21e701               │
-  │  ja4              t13d1305h2_bda08f0cbb17_c83d862dc2aa           │
-  │  ja4s             t13d020000_1301_1acd28cc39f1                   │
-  ╰──────────────────────────────────────────────────────────────────╯
-
-  ────────────────────────────────────────────────────────────────────
-  ◆  unclassified client
+  fingerprints ─────────────────────────────────────────────────────────────────────────────────────
+    ja3              d879bc8777862a634eecc81a0d21e701
+    ja4              t13d1305h2_bda08f0cbb17_c83d862dc2aa
+    ja4s             t13d020000_1301_1acd28cc39f1
 ```
 
 ### live mode with verbose and cert chain
 
 ```
 $ grip --verbose --cert-chain --all-fp example.com
-
 resolve    querying dns for example.com, sni example.com
-receive    TLS 1.3, 95 B in, 1169 ms
+receive    TLS 1.3, 95 B in, 65 ms
 fingerprint ja4 t13d1305h2_bda08f0cbb17_c83d862dc2aa
 certificate 4 in chain, leaf CN=example.com
+  grip  ·  live handshake  example.com:443 ──────────────────────────────────────────────────────
 
-  grip  ·  live handshake  example.com:443
-  ────────────────────────────────────────────────────────────────────
+  negotiated ───────────────────────────────────────────────────────────────────────────────────────
+    tls version      TLS 1.3
+    cipher suite     TLS_AES_128_GCM_SHA256  0x1301
+    key exchange     X25519
+    sni              example.com  hostname
+    offered          TLS 1.3 · TLS 1.2
 
-  ╭─ negotiated ─────────────────────────────────────────────────────╮
-  │  tls version      TLS 1.3                                        │
-  │  cipher suite     TLS_AES_128_GCM_SHA256  0x1301                 │
-  │  key exchange     X25519                                         │
-  │  sni              example.com  hostname                          │
-  │  offered          TLS 1.3 · TLS 1.2                              │
-  ╰──────────────────────────────────────────────────────────────────╯
+  certificate ──────────────────────────────────────────────────────────────────────────────────────
+    subject          CN=example.com
+    issuer           C=US, O=SSL Corporation, CN=Cloudflare TLS Issuing ECC CA 3
+    sans             example.com  *.example.com
+    expires          2026-10-27   (34 days)
+    sha-256          6153a96fd1a6ab7f4d438fc34932484299d0729d9140b3a126bb2f9c07b02200
+    ct logs          1 sct embedded + 3 intermediates
+    chain 1          C=US, O=SSL Corporation, CN=Cloudflare TLS Issuing ECC CA 3
+                     └─ f15f29abef73aa4dd9ab754baeae3685bdd3874b46b525071177628685718026
+    chain 2          C=US, O=SSL Corporation, CN=SSL.com TLS Transit ECC CA R2
+                     └─ 5d1bc399274e649e1c72697de91a54ad725088c5221cb61e17ee9c290bc42a92
+    chain 3          C=US, O=SSL Corporation, CN=SSL.com TLS ECC Root CA 2022
+                     └─ ba06d3d3e348fce7478cc84b422d0e638e9e221ef1a0b53adc14cc70e04b8ab8
 
-  ╭─ certificate ────────────────────────────────────────────────────╮
-  │  subject          CN=example.com                                 │
-  │  issuer           C=US, O=SSL Corporation, CN=Cloudflare TLS Iss…│
-  │  sans             example.com  *.example.com                     │
-  │  expires          2026-10-27   (52 days)                         │
-  │  sha-256          61:53:a9:6f:d1:a6:ab:7f:4d:43:8f:c3:49:32:48:4…│
-  │  ct logs          1 scts embedded + 3 intermediates              │
-  ╰──────────────────────────────────────────────────────────────────╯
+  fingerprints ─────────────────────────────────────────────────────────────────────────────────────
+    ja3              d879bc8777862a634eecc81a0d21e701
+    ja4              t13d1305h2_bda08f0cbb17_c83d862dc2aa
+    ja4s             t13d020000_1301_1acd28cc39f1
 
-  ╭─ chain of trust ─────────────────────────────────────────────────╮
-  │  leaf             CN=example.com  depth 0                        │
-  │                   └─ 61:53:a9:6f:d1:a6:ab:7f:4d:43:8f:c3:49:32:4…│
-  │  issuer           C=US, O=SSL Corporation, CN=Cloudflar…  depth 1│
-  │                   └─ f1:5f:29:ab:ef:73:aa:4d:d9:ab:75:4b:ae:ae:3…│
-  │  issuer           C=US, O=SSL Corporation, CN=SSL.com T…  depth 2│
-  │                   └─ 5d:1b:c3:99:27:4e:64:9e:1c:72:69:7d:e9:1a:5…│
-  │  issuer           C=US, O=SSL Corporation, CN=SSL.com T…  depth 3│
-  │                   └─ ba:06:d3:d3:e3:48:fc:e7:47:8c:c8:4b:42:2d:0…│
-  ╰──────────────────────────────────────────────────────────────────╯
+  telemetry ────────────────────────────────────────────────────────────────────────────────────────
+    handshake        65 ms
+    bytes            205 out  95 in
+    grease           0 filtered
+    resolved         [2606:4700:90c5:72db:f2ef:bac:ef6b:ff98]:443 104.20.23.154:443
+                     172.66.147.243:443
 
-  ╭─ fingerprints ───────────────────────────────────────────────────╮
-  │  ja3              d879bc8777862a634eecc81a0d21e701               │
-  │  ja4              t13d1305h2_bda08f0cbb17_c83d862dc2aa           │
-  │  ja4s             t13d020000_1301_1acd28cc39f1                   │
-  ╰──────────────────────────────────────────────────────────────────╯
-
-  ╭─ telemetry ──────────────────────────────────────────────────────╮
-  │  handshake        1169 ms                                        │
-  │  bytes            205 out  95 in                                 │
-  │  grease           0 filtered                                     │
-  │  resolved         [2606:4700:10::6814:179a]:443  [2606:4700:10::…│
-  ╰──────────────────────────────────────────────────────────────────╯
-
-  ────────────────────────────────────────────────────────────────────
-  ◆  1169 ms  ·  unclassified client
+  ◆  65 ms
 ```
 
 ### json output
@@ -289,7 +280,10 @@ certificate 4 in chain, leaf CN=example.com
   "target": "example.com:443",
   "negotiated": {
     "tls_version": "TLS 1.3",
-    "offered_versions": ["TLS 1.3", "TLS 1.2"],
+    "offered_versions": [
+      "TLS 1.3",
+      "TLS 1.2"
+    ],
     "cipher_suite": "TLS_AES_128_GCM_SHA256",
     "cipher_hex": "0x1301",
     "key_exchange": "X25519",
@@ -300,17 +294,23 @@ certificate 4 in chain, leaf CN=example.com
   "certificate": {
     "subject": "CN=example.com",
     "issuer": "C=US, O=SSL Corporation, CN=Cloudflare TLS Issuing ECC CA 3",
-    "sans": ["example.com", "*.example.com"],
-    "expires": "2026-10-27   (52 days)",
+    "sans": [
+      "example.com",
+      "*.example.com"
+    ],
+    "expires": "2026-10-27   (34 days)",
     "sha256": "61:53:a9:6f:d1:a6:ab:7f:4d:43:8f:c3:49:32:48:42:99:d0:72:9d:91:40:b3:a1:26:bb:2f:9c:07:b0:22:00",
-    "ct_logs": "1 scts embedded"
+    "ct_logs": "1 sct embedded"
   },
+  "cert_chain": null,
   "fingerprints": {
     "ja3": "d879bc8777862a634eecc81a0d21e701",
     "ja4": "t13d1305h2_bda08f0cbb17_c83d862dc2aa",
     "ja4s": "t13d020000_1301_1acd28cc39f1",
     "lookup": null
-  }
+  },
+  "raw": null,
+  "verbose_info": null
 }
 ```
 
@@ -405,7 +405,7 @@ src/
       mod.rs              entry point, mode dispatch
       live.rs             live probe orchestration
       pcap.rs             pcap analysis orchestration
-      helpers.rs          report building, progress events
+      helpers.rs          report building, width, palette
   tls/                    raw TLS parsing (hand-rolled, no TLS library)
     record.rs             TLS record layer (content type, version, length, payload)
     version.rs            TLS version detection (the lying version field)
@@ -426,7 +426,7 @@ src/
     ja3.rs                JA3 MD5 hash
     ja4.rs                JA4 structured hash (three parts)
     ja4s.rs               JA4S server fingerprint
-    lookup.rs             client identification from JA4 database
+    lookup.rs             client identification against embedded JA4 DB
   pcap/                   pcap file handling
     reader.rs             pcap global header + record parsing
     tcp.rs                TCP packet parsing (IP, TCP headers, four tuple)
@@ -438,7 +438,6 @@ src/
       dial.rs             DNS resolution + TCP connection with timeout
       raw.rs              TLS handshake driver (send ClientHello, read response)
       cert_fetch.rs       rustls fallback for TLS 1.3 certificate retrieval
-      progress.rs         Progress trait for live animation events
   output/                 rendering and output formats
     model.rs              DTOs (LiveReport, PcapReport, Fingerprints, etc.)
     human/                human-readable terminal output
@@ -451,13 +450,16 @@ src/
     hex.rs                hexdump utility
     writer.rs             output writer abstraction
   ui/                     design system
-    theme.rs              truecolor palette, gradients, glyphs, box drawing
-    mascot.rs             Nib mascot (pulse animation)
-    stage.rs              animated build checklist (painter thread)
-    panel.rs              aligned box layout primitive
+    theme.rs              truecolor palette, gradients, glyphs
+    mascot.rs             Nib, the grip mark glyph
+    panel.rs              section headers, key/value rows, wrapping
   db/                     built-in fingerprint database
     known.rs              PHF map of known JA4 fingerprints (generated at build time)
   error.rs                error types (thiserror)
+assets/
+  fingerprints.csv      known JA4/JA3 fingerprints (FoxIO mapping snapshot + grip self)
+scripts/
+  import_ja4_mapping.py refresh fingerprints.csv from upstream (`just update-db`)
 ```
 
 ---
@@ -479,7 +481,7 @@ src/
 
 **cert fallback requires network.** for TLS 1.3 live mode, the certificate is encrypted in the raw capture. grip falls back to a rustls connection to fetch it. if you are offline or behind a firewall that blocks the connection, you will not get the cert.
 
-**JA4 client DB is static.** the built-in fingerprint database is compiled at build time from `assets/fingerprints.csv`. new clients require a rebuild.
+**JA4 client DB is static.** the built-in fingerprint database is compiled at build time from `assets/fingerprints.csv`. refresh it from the upstream FoxIO mapping with `just update-db` (runs `scripts/import_ja4_mapping.py`), then rebuild.
 
 **no QUIC or HTTP3.** JA4 supports QUIC fingerprinting but grip does not parse QUIC packets yet.
 
@@ -543,13 +545,13 @@ the key design decisions:
 - **pure functional core**: `tls` and `fp` are `&[u8]` in, structured data out. no I/O, no network, no file system. testable with canned byte arrays.
 - **no unsafe**: `#![forbid(unsafe_code)]` across the entire crate.
 - **raw bytes are truth**: the TLS parser reads raw bytes. rustls is only used for certificate fallback, never for fingerprinting.
-- **custom UI system**: truecolor gradients, animated mascot, checklist progress. designed for this tool, not a generic library.
+- **custom UI system**: truecolor gradients, responsive sections, word wrapping with no truncation. designed for this tool, not a generic library.
 
 ---
 
 ## contributing
 
-open issues for bugs or feature requests. pull requests are welcome for fixes and new features. if you are adding a new TLS extension to the parser, add a test with the raw bytes. if you are adding a new client to the fingerprint database, add it to `assets/fingerprints.csv`.
+open issues for bugs or feature requests. pull requests are welcome for fixes and new features. if you are adding a new TLS extension to the parser, add a test with the raw bytes. if you are adding a new client to the fingerprint database, add it to `assets/fingerprints.csv` (or refresh the whole DB from upstream with `just update-db`).
 
 ---
 
