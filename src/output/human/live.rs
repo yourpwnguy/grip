@@ -1,4 +1,10 @@
 //! Live report — the `grip example.com` view.
+//!
+//! Sections are stacked tightly: a titled rule, then rows. The certificate
+//! section absorbs the chain (`--cert-chain`), because intermediates are just
+//! more certificates hanging off the leaf, and the fingerprints section
+//! carries the client identity so the answer to "who is this?" never hides
+//! in a footer.
 
 use std::io::Write;
 
@@ -11,30 +17,29 @@ use crate::ui::theme::{Palette, glyph, pal};
 /// # Errors
 ///
 /// Returns an I/O error if writing to `w` fails.
-pub fn render_live(report: &LiveReport, w: &mut dyn Write, p: Palette) -> std::io::Result<()> {
-    let mut lines = panel::header(&report.target, "live handshake", p);
+pub fn render_live(
+    report: &LiveReport,
+    w: &mut dyn Write,
+    p: Palette,
+    width: usize,
+) -> std::io::Result<()> {
+    let mut lines = panel::header(&report.target, "live handshake", p, width);
     lines.push(String::new());
-    lines.extend(negotiated(report, p));
+    lines.extend(negotiated(report, p, width));
     lines.push(String::new());
-    lines.extend(certificate(report, p));
-    if let Some(chain) = chain(report, p) {
-        lines.push(String::new());
-        lines.extend(chain);
-    }
+    lines.extend(certificate(report, p, width));
     lines.push(String::new());
-    lines.extend(fingerprints(report, p));
-    if let Some(t) = telemetry(report, p) {
+    lines.extend(fingerprints(report, p, width));
+    if let Some(t) = telemetry(report, p, width) {
         lines.push(String::new());
         lines.extend(t);
     }
     let elapsed = report.verbose_info.as_ref().map_or(0, |v| v.handshake_ms);
-    let note = report
-        .fingerprints
-        .lookup
-        .as_deref()
-        .unwrap_or("unclassified client");
-    lines.push(String::new());
-    lines.extend(panel::footer(elapsed, note, p));
+    let foot = panel::footer(elapsed, "", p);
+    if !foot.is_empty() {
+        lines.push(String::new());
+        lines.extend(foot);
+    }
     for l in &lines {
         writeln!(w, "{l}")?;
     }
@@ -44,7 +49,7 @@ pub fn render_live(report: &LiveReport, w: &mut dyn Write, p: Palette) -> std::i
     Ok(())
 }
 
-fn negotiated(report: &LiveReport, p: Palette) -> Vec<String> {
+fn negotiated(report: &LiveReport, p: Palette, width: usize) -> Vec<String> {
     let n = &report.negotiated;
     let mut panel = Panel::new("negotiated")
         .accent(pal::CYAN)
@@ -68,10 +73,10 @@ fn negotiated(report: &LiveReport, p: Palette) -> Vec<String> {
             Tone::Muted,
         ));
     }
-    panel.render(p)
+    panel.render(p, width)
 }
 
-fn certificate(report: &LiveReport, p: Palette) -> Vec<String> {
+fn certificate(report: &LiveReport, p: Palette, width: usize) -> Vec<String> {
     let mut panel = Panel::new("certificate").accent(pal::AMBER);
     if let Some(c) = &report.certificate {
         panel = panel
@@ -101,64 +106,72 @@ fn certificate(report: &LiveReport, p: Palette) -> Vec<String> {
             };
             panel = panel.row(Row::kv_tone("expires", exp, tone));
         }
-        panel = panel
-            .row_opt("sha-256", c.sha256.clone(), Tone::Muted)
-            .row_opt("ct logs", c.ct_logs.clone(), Tone::Plain);
+        // Colonless hex reads as one token and wraps without splitting a
+        // byte pair across the visual break.
+        panel = panel.row_opt(
+            "sha-256",
+            c.sha256.as_ref().map(|s| s.replace(':', "")),
+            Tone::Muted,
+        );
+        panel = panel.row_opt("ct logs", c.ct_logs.clone(), Tone::Plain);
     } else {
         panel = panel
             .row(Row::kv_tone("status", "not recovered", Tone::Bad))
             .row(Row::Note(
-                "tls 1.3 encrypts the certificate message; the verified".to_string(),
-            ))
-            .row(Row::Note(
-                "fallback also failed — retry with --no-verify".to_string(),
+                "tls 1.3 encrypts the certificate message; the verified fallback \
+                 also failed — retry with --no-verify"
+                    .to_string(),
             ));
     }
-    panel.render(p)
-}
-
-fn chain(report: &LiveReport, p: Palette) -> Option<Vec<String>> {
-    let chain = report.cert_chain.as_ref()?;
-    if chain.len() <= 1 {
-        return None;
-    }
-    let mut panel = Panel::new("chain of trust").accent(pal::AZURE);
-    for (i, c) in chain.iter().enumerate() {
-        let depth = if i == 0 { "leaf" } else { "issuer" };
-        panel = panel.row(
-            Row::kv_tone(
-                depth,
+    // Intermediates ride in the same section: the leaf's `issuer` row is
+    // already `chain 1`'s subject, so this reads as one continuous chain.
+    if let Some(chain) = &report.cert_chain {
+        for (depth, c) in chain.iter().enumerate().skip(1) {
+            panel = panel.row(Row::kv_tone(
+                format!("chain {depth}"),
                 c.subject.clone().unwrap_or_else(|| "—".to_string()),
-                if i == 0 { Tone::Key } else { Tone::Plain },
-            )
-            .note(format!("depth {i}")),
-        );
-        if let Some(fp) = &c.sha256 {
-            panel = panel.row(Row::Note(format!("{} {fp}", glyph::LINK)));
+                Tone::Plain,
+            ));
+            if let Some(fp) = &c.sha256 {
+                panel = panel.row(Row::Note(format!(
+                    "{} {}",
+                    glyph::LINK,
+                    fp.replace(':', "")
+                )));
+            }
         }
     }
-    Some(panel.render(p))
+    panel.render(p, width)
 }
 
-fn fingerprints(report: &LiveReport, p: Palette) -> Vec<String> {
+fn fingerprints(report: &LiveReport, p: Palette, width: usize) -> Vec<String> {
     let f = &report.fingerprints;
     let mut panel = Panel::new("fingerprints").accent(pal::MAGENTA);
-    panel = panel
-        .row_opt("ja3", f.ja3.clone(), Tone::Sig)
-        .row_opt("ja4", f.ja4.clone(), Tone::Sig)
-        .row_opt("ja4s", f.ja4s.clone(), Tone::Sig);
-    if let Some(m) = &f.lookup {
-        panel = panel.row(Row::Note(format!("matches {m}")));
-    }
-    if f.ja3.is_none() && f.ja4.is_none() && f.ja4s.is_none() {
+    let any = f.ja3.is_some() || f.ja4.is_some() || f.ja4s.is_some();
+    if any {
+        panel = panel
+            .row_opt("ja3", f.ja3.clone(), Tone::Sig)
+            .row_opt("ja4", f.ja4.clone(), Tone::Sig)
+            .row_opt("ja4s", f.ja4s.clone(), Tone::Sig);
+        // `None` means `--lookup` was never requested: omit the row rather
+        // than advertising a miss. A requested miss renders muted.
+        if let Some(name) = &f.lookup {
+            let tone = if name == crate::output::model::UNCLASSIFIED {
+                Tone::Muted
+            } else {
+                Tone::Good
+            };
+            panel = panel.row(Row::kv_tone("client", name, tone));
+        }
+    } else {
         panel = panel.row(Row::kv_tone("none", "use --all-fp", Tone::Muted));
     }
-    panel.render(p)
+    panel.render(p, width)
 }
 
-fn telemetry(report: &LiveReport, p: Palette) -> Option<Vec<String>> {
+fn telemetry(report: &LiveReport, p: Palette, width: usize) -> Option<Vec<String>> {
     let v = report.verbose_info.as_ref()?;
-    let mut t = Panel::new("telemetry").accent(pal::STEEL);
+    let mut t = Panel::new("telemetry").accent(pal::AZURE);
     t = t
         .row(Row::kv_tone(
             "handshake",
@@ -181,5 +194,5 @@ fn telemetry(report: &LiveReport, p: Palette) -> Option<Vec<String>> {
             Tone::Muted,
         ));
     }
-    Some(t.render(p))
+    Some(t.render(p, width))
 }
