@@ -18,7 +18,7 @@ pub struct Cli {
 
     // ── Modes ──
     /// Analyze `ClientHellos` from a .pcap file
-    #[arg(long, value_name = "FILE")]
+    #[arg(short = 'c', long, value_name = "FILE")]
     pub pcap: Option<PathBuf>,
 
     // ── Connection ──
@@ -27,53 +27,53 @@ pub struct Cli {
     pub port: u16,
 
     /// Override SNI hostname
-    #[arg(long, value_name = "NAME")]
+    #[arg(short = 's', long, value_name = "NAME")]
     pub sni: Option<String>,
 
     /// Connection timeout in seconds
-    #[arg(long, default_value_t = 10, value_name = "SECS")]
+    #[arg(short = 't', long, default_value_t = 10, value_name = "SECS")]
     pub timeout: u64,
 
     /// Skip certificate verification (currently no verification is enforced; flag kept for compatibility)
-    #[arg(long)]
+    #[arg(short = 'k', long)]
     pub no_verify: bool,
 
     // ── Fingerprints ──
     /// Show JA3 fingerprint
-    #[arg(long)]
+    #[arg(short = '3', long)]
     pub ja3: bool,
 
     /// Show JA4 fingerprint
-    #[arg(long)]
+    #[arg(short = '4', long)]
     pub ja4: bool,
 
     /// Show JA4S server fingerprint
-    #[arg(long)]
+    #[arg(short = '5', long)]
     pub ja4s: bool,
 
     /// Show all fingerprint variants
-    #[arg(long)]
+    #[arg(short = 'a', long)]
     pub all_fp: bool,
 
     /// Lookup fingerprint against known DB
-    #[arg(long)]
+    #[arg(short = 'l', long)]
     pub lookup: bool,
 
     // ── Output ──
     /// Output format: human (pretty) or json
-    #[arg(long, value_enum, default_value_t = Format::Human, value_name = "FMT")]
+    #[arg(short = 'f', long, value_enum, default_value_t = Format::Human, value_name = "FMT")]
     pub format: Format,
 
     /// Dump raw `ClientHello` + `ServerHello` hex
-    #[arg(long)]
+    #[arg(short = 'r', long)]
     pub raw: bool,
 
     /// Show full certificate chain (currently shows leaf; full chain planned)
-    #[arg(long)]
+    #[arg(short = 'C', long)]
     pub cert_chain: bool,
 
     /// Fingerprint only, no decoration
-    #[arg(long)]
+    #[arg(short = 'q', long)]
     pub quiet: bool,
 
     /// Write output to file
@@ -82,15 +82,15 @@ pub struct Cli {
 
     // ── Pcap options ──
     /// Only show this source IP (pcap mode)
-    #[arg(long, value_name = "IP")]
+    #[arg(short = 'F', long, value_name = "IP")]
     pub filter: Option<String>,
 
     /// Deduplicate, show each fingerprint once (pcap mode)
-    #[arg(long)]
+    #[arg(short = 'u', long)]
     pub unique: bool,
 
     /// Sort by: ip | fingerprint | count
-    #[arg(long, value_enum, default_value_t = SortBy::Count, value_name = "FIELD")]
+    #[arg(short = 'S', long, value_enum, default_value_t = SortBy::Count, value_name = "FIELD")]
     pub sort_by: SortBy,
 
     // ── Verbosity / UI ──
