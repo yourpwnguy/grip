@@ -1,6 +1,6 @@
 [package]
 name = "grip"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 description = "grip — TLS handshake inspector + fingerprinter (JA3/JA4/JA4S) with live and pcap modes"
 license = "MIT"

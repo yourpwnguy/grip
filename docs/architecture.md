@@ -1,4 +1,4 @@
-# `grip` — Architecture & Project Structure (v0.1.0)
+# `grip` — Architecture & Project Structure (v0.1.2)
 
 > Source of truth: `idea.md`. This document does **not** expand scope — it turns that spec into a buildable, modular, idiomatic Rust design.
 

@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "grip"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "anstream 0.6.21",
  "chrono",
