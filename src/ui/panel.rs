@@ -370,7 +370,8 @@ mod tests {
 
     #[test]
     fn empty_panel_renders_nothing() {
-        assert!(Panel::new("x").render(Palette::plain(), 80).is_empty());
+        let rendered = Panel::new("x").render(Palette::plain(), 80);
+        assert_eq!(rendered, Vec::<String>::new());
     }
 
     #[test]
@@ -457,7 +458,7 @@ mod tests {
 
     #[test]
     fn footer_is_absent_when_empty_and_shows_data_when_not() {
-        assert!(footer(0, "", Palette::plain()).is_empty());
+        assert_eq!(footer(0, "", Palette::plain()), Vec::<String>::new());
         let f = footer(42, "3 unique fingerprints", Palette::plain());
         assert_eq!(f.len(), 1);
         assert!(f[0].contains("42 ms"));

@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn parse_extensions_empty() {
-        assert!(parse_extensions(&[]).unwrap().is_empty());
+        assert_eq!(parse_extensions(&[]).unwrap(), Vec::new());
     }
 
     #[test]

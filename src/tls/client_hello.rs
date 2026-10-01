@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(ch.legacy_version, 0x0303);
         assert_eq!(ch.cipher_suites, vec![0x1301]);
         assert_eq!(ch.compression_methods, vec![0x00]);
-        assert!(ch.extensions.is_empty());
+        assert_eq!(ch.extensions, Vec::new());
     }
 
     #[test]

@@ -94,6 +94,6 @@ mod tests {
     #[test]
     fn no_clienthello_returns_empty() {
         let stream = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
-        assert!(extract_client_hellos(stream).is_empty());
+        assert_eq!(extract_client_hellos(stream), Vec::new());
     }
 }
