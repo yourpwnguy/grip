@@ -1,4 +1,4 @@
-//! Pcap report — ranked client table.
+//! The pcap report: the ranked client table.
 
 use std::io::Write;
 
@@ -90,13 +90,13 @@ pub fn render_pcap(
         lines.push(format!(
             "  {}  {:<15} {} {:<14} {} {}",
             p.dim(&rank, pal::STEEL),
-            p.paint(&panel::truncate(&c.ip, 15), pal::CHROME),
+            p.paint(&crate::ui::text::truncate(&c.ip, 15), pal::CHROME),
             p.paint(
-                &format!("{:<38}", panel::truncate(&c.ja4, 38)),
+                &format!("{:<38}", crate::ui::text::truncate(&c.ja4, 38)),
                 pal::MAGENTA
             ),
             p.paint(
-                &panel::truncate(c.client.as_deref().unwrap_or("—"), 14),
+                &crate::ui::text::truncate(c.client.as_deref().unwrap_or("—"), 14),
                 match c.client.as_deref() {
                     Some(n) if n != crate::output::model::UNCLASSIFIED => pal::LIME,
                     _ => pal::MIST,

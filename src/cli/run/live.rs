@@ -1,4 +1,4 @@
-//! Live pipeline — dial a target, capture the handshake, render.
+//! The live pipeline: dial a target, capture the handshake, render.
 
 use std::io::Write;
 use std::time::Instant;
@@ -50,7 +50,7 @@ pub fn run_live(cli: &Cli, target_raw: &str, w: &mut dyn Write) -> GripResult<()
         }
     }
 
-    let report = super::helpers::build_live_report(cli, endpoint, &probe, handshake_ms, verbose);
+    let report = super::report::build_live_report(cli, endpoint, &probe, handshake_ms, verbose);
 
     if cli.quiet {
         let f = &report.fingerprints;
@@ -69,8 +69,8 @@ pub fn run_live(cli: &Cli, target_raw: &str, w: &mut dyn Write) -> GripResult<()
 
     match cli.format {
         crate::cli::args::Format::Human => {
-            let pal = super::helpers::report_palette(cli);
-            let width = super::helpers::report_width(cli);
+            let pal = super::terminal::report_palette(cli);
+            let width = super::terminal::report_width(cli);
             crate::output::human::render_live(&report, w, pal, width).map_err(GripError::Io)
         }
         crate::cli::args::Format::Json => crate::output::json::render_json(&report, w),

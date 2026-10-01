@@ -1,4 +1,4 @@
-//! Pcap pipeline — read a capture, reassemble TCP, rank fingerprints.
+//! The pcap pipeline: read a capture, reassemble TCP, rank fingerprints.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -122,8 +122,8 @@ pub fn run_pcap(cli: &Cli, file: &std::path::Path, w: &mut dyn Write) -> GripRes
 
     match cli.format {
         crate::cli::args::Format::Human => {
-            let pal = super::helpers::report_palette(cli);
-            let width = super::helpers::report_width(cli);
+            let pal = super::terminal::report_palette(cli);
+            let width = super::terminal::report_width(cli);
             crate::output::human::render_pcap(&report, w, pal, width).map_err(GripError::Io)
         }
         crate::cli::args::Format::Json => crate::output::json::render_json(&report, w),

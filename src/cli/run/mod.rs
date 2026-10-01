@@ -1,9 +1,11 @@
-//! CLI orchestration — the single place that sees `cli`, `net`, `pcap` and `ui`
+//! CLI orchestration. This is the single place that sees `cli`, `net`, `pcap` and `ui`
 //! together. Domain stays pure; this layer owns the two pipelines.
 
 mod helpers;
 mod live;
 mod pcap;
+mod report;
+mod terminal;
 
 use std::io::Write;
 
