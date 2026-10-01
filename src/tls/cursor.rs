@@ -1,4 +1,7 @@
 //! A bounds-checked reader for length-prefixed handshake fields.
+//!
+//! Named `FieldReader` rather than `Cursor` so it never gets confused with
+//! `std::io::Cursor` when both show up in the same file during review.
 
 use crate::error::{GripError, GripResult, ParseKind};
 
@@ -10,13 +13,13 @@ use crate::error::{GripError, GripResult, ParseKind};
 ///
 /// `base` is the offset errors get reported against. Pass the handshake header
 /// length so the numbers line up with a full hex dump.
-pub(super) struct Cursor<'a> {
+pub(super) struct FieldReader<'a> {
     body: &'a [u8],
     pos: usize,
     base: usize,
 }
 
-impl<'a> Cursor<'a> {
+impl<'a> FieldReader<'a> {
     /// Start reading `body`, reporting errors as if they started at `base`.
     pub const fn new(body: &'a [u8], base: usize) -> Self {
         Self { body, pos: 0, base }

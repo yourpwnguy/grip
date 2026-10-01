@@ -4,7 +4,7 @@
 //! value (not a list) and the extensions are typically fewer. We also handle
 //! TLS 1.3 `HelloRetryRequest` which is a `ServerHello` with a magic `random`.
 
-use super::cursor::Cursor;
+use super::cursor::FieldReader;
 use crate::error::{GripError, GripResult, ParseKind};
 use crate::tls::extensions::{Extension, parse_extensions};
 use crate::tls::record::{ContentType, TlsRecord};
@@ -103,7 +103,7 @@ impl ServerHello {
     fn parse_body(body: &[u8], raw: Vec<u8>) -> GripResult<Self> {
         // The 4 skips the handshake header; error offsets point into the full
         // message so they line up with a hex dump.
-        let mut c = Cursor::new(body, 4);
+        let mut c = FieldReader::new(body, 4);
 
         let legacy_version = c.u16()?;
         let mut random = [0u8; 32];
