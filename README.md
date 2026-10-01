@@ -405,9 +405,12 @@ src/
       mod.rs              entry point, mode dispatch
       live.rs             live probe orchestration
       pcap.rs             pcap analysis orchestration
-      helpers.rs          report building, width, palette
+      helpers.rs          target parsing, cert summaries, field decoding
+      report.rs           probe results to DTOs
+      terminal.rs         width and palette detection
   tls/                    raw TLS parsing (hand-rolled, no TLS library)
     record.rs             TLS record layer (content type, version, length, payload)
+    cursor.rs             bounds-checked reader for length-prefixed fields
     version.rs            TLS version detection (the lying version field)
     cipher.rs             cipher suite ID to IANA name mapping
     grease.rs             GREASE detection and filtering
@@ -448,11 +451,11 @@ src/
       quiet.rs            single-value output for piping
     json.rs               JSON serialization
     hex.rs                hexdump utility
-    writer.rs             output writer abstraction
   ui/                     design system
     theme.rs              truecolor palette, gradients, glyphs
     mascot.rs             Nib, the grip mark glyph
-    panel.rs              section headers, key/value rows, wrapping
+    panel.rs              section headers, key/value rows
+    text.rs               wrapping and truncation helpers
   db/                     built-in fingerprint database
     known.rs              PHF map of known JA4 fingerprints (generated at build time)
   error.rs                error types (thiserror)

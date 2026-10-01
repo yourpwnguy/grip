@@ -1,4 +1,4 @@
-//! `grip` — TLS handshake inspector + fingerprinter.
+//! `grip` is a TLS handshake inspector and fingerprinter.
 //!
 //! `grip` reads raw TLS bytes off a TCP socket (or pcap file) and parses
 //! them without a TLS library, producing JA3/JA4/JA4S fingerprints and

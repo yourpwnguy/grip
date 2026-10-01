@@ -1,4 +1,4 @@
-//! Live probe — raw TLS handshake capture.
+//! The live probe: raw TLS handshake capture.
 //!
 //! This module owns the live network path: it crafts a `ClientHello` by hand,
 //! speaks it over a raw `TcpStream`, and parses the `ServerHello` from the

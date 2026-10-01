@@ -1,4 +1,4 @@
-//! CLI interface — arg parsing + orchestration.
+//! The CLI interface: arg parsing plus orchestration.
 
 pub mod args;
 pub mod run;

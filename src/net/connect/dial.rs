@@ -1,4 +1,4 @@
-//! Dial helpers — DNS and `TcpStream` establishment.
+//! Dial helpers: DNS resolution and `TcpStream` establishment.
 
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;

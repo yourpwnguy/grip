@@ -8,7 +8,7 @@
 
 use std::io;
 
-/// The kind of TLS parse failure — used inside `GripError::Parse` for
+/// The kind of TLS parse failure, used inside `GripError::Parse` for
 /// structured matching in tests and for precise user diagnostics.
 ///
 /// We keep this non-exhaustive so we can add variants without a breaking
@@ -124,7 +124,7 @@ pub enum GripError {
     #[error("certificate error: {0}")]
     Certificate(String),
 
-    /// Generic internal error — should be rare.
+    /// Generic internal error, should be rare.
     #[error("{0}")]
     Other(String),
 }

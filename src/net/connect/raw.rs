@@ -1,4 +1,4 @@
-//! Raw handshake — read loop that captures `ServerHello` from the wire.
+//! The raw handshake: a read loop that captures `ServerHello` off the wire.
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -26,7 +26,7 @@ pub struct RawOutcome {
 /// `poll` is the socket `SO_RCVTIMEO`; the overall deadline is enforced by
 /// `deadline = start + timeout`. TLS 1.3 is treated as terminal after
 /// `ServerHello` because its `Certificate` is encrypted and will never appear
-/// here — waiting only burns time.
+/// here, waiting only burns time.
 pub fn drive(
     stream: &mut TcpStream,
     client_hello_raw: &[u8],
@@ -119,7 +119,7 @@ pub fn drive(
     {
         cert_chain = Some(chain);
     }
-    // Raw `Certificate` bytes without a parseable chain are not useful — the
+    // Raw `Certificate` bytes without a parseable chain are not useful, the
     // caller will try the `rustls` fallback.
     let _ = raw_cert_bytes;
 

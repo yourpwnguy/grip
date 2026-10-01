@@ -79,8 +79,7 @@ grip/
     │   ├── model.rs          # LiveReport, PcapReport, ClientEntry (Serialize)
     │   ├── human.rs          # pretty terminal (sections, wrapping, colors)
     │   ├── json.rs           # JSON serialization
-    │   ├── hex.rs            # hex dump formatting
-    │   └── writer.rs         # OutputWriter: stdout vs file, --quiet
+    │   └── hex.rs            # hex dump formatting
     ├── cli/                  # ── INTERFACE: clap + orchestration ──
     │   ├── mod.rs
     │   ├── args.rs           # Cli, Mode, Format, SortBy (clap derive)
@@ -185,7 +184,6 @@ All fingerprint types are newtypes (`struct Ja4(String)`) with `Display`, `AsRef
 | `human.rs` | `fn render_live(report: &LiveReport, w: &mut dyn Write, p: Palette, width: usize)`, `fn render_pcap(report: &PcapReport, w: &mut dyn Write, p: Palette, width: usize)`. Titled sections and key/value rows via `ui::panel`, truecolor via `ui::theme::Palette` with `NO_COLOR`/`FORCE_COLOR`/`is_terminal` checks. Long values wrap, never truncate. No business logic — pure formatting. |
 | `json.rs` | `fn render_json<T: Serialize>(v: &T, w: &mut dyn Write) -> GripResult<()>` using `serde_json::to_writer_pretty`. |
 | `hex.rs` | `fn hexdump(data: &[u8], w: &mut dyn Write)` — `0000  16 03 01 …` with ASCII gutter, like `idea.md` raw mode. |
-| `writer.rs` | `enum OutputWriter { Stdout, File(File) }` + `fn writer_for(path: Option<&Path>) -> Box<dyn Write>`; handles `--quiet` (only fingerprint) and `anstream::AutoStream` wrapping. |
 
 ### `src/cli/`
 
@@ -264,7 +262,7 @@ Cli::parse
   → fp::ja3::compute_ja3 / fp::ja4::compute_ja4 / fp::ja4s::compute_ja4s
   → db::lookup
   → output::model::LiveReport { negotiated, cert, fps, raw }
-  → output::writer → output::human|json|hex → stdout or file
+  → output::human|json → stdout or the -o file
 ```
 
 **Pcap mode** `grip --pcap capture.pcap`:
@@ -480,7 +478,7 @@ Explicitly **not** used: Factory, Abstract Factory, Dependency Injection contain
 * **No business logic in rendering.** `HumanRenderer` takes `&LiveReport` DTO; it does not call `fp::compute`. This keeps `output` testable with canned DTOs.
 * **Responsiveness:** `net::probe` prints nothing until done — handshake is <100ms. For pcap, `reader` streams; `--filter` and `--sort-by` are applied after aggregation (in-memory `Vec<ClientEntry>` ≤10k entries). No progress bar needed for v0.1.0 (files <100 MiB).
 * **Error presentation:** `cli::run` returns `GripError`; `main.rs` maps to `miette::Report` for pretty `Error: …` with `help:` suggestion (e.g., `hint: try --port 8443`). Exit codes: `0` success, `1` parse/network error, `2` invalid args (from clap).
-* **`--quiet` and `-o`:** `writer.rs` handles both. `--quiet` delegates to `JsonRenderer` or minimal `HumanRenderer::render_quiet` (prints `ja4\n` only). `-o` opens file *before* network/pcap work so permission errors fail fast.
+* **`--quiet` and `-o`:** `cli::run` opens the `-o` sink up front, before any network or pcap work, so a bad path fails fast. `--quiet` bypasses the report renderers and prints a single fingerprint line via `human::render_quiet`.
 
 ---
 

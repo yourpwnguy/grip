@@ -1,4 +1,4 @@
-//! `--quiet` — single value for piping.
+//! `--quiet`: a single value for piping.
 
 use std::io::Write;
 

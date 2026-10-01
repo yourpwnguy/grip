@@ -1,4 +1,4 @@
-//! Output DTOs — serializable models for both human and JSON renderers.
+//! Output DTOs: serializable models for both the human and JSON renderers.
 //!
 //! We decouple domain structs (`ClientHello`, `ServerHello`) from presentation.
 //! The DTOs are plain data, `Serialize` only here, so domain evolution doesn't
@@ -10,7 +10,7 @@ use serde::Serialize;
 /// `--lookup` was requested but the database had no match.
 ///
 /// `None` means lookup was never requested (renderers omit the row or show
-/// "—"); `Some(UNCLASSIFIED)` means it ran and missed (renderers show the
+/// ","); `Some(UNCLASSIFIED)` means it ran and missed (renderers show the
 /// word, muted). Exact matches carry the client name.
 pub const UNCLASSIFIED: &str = "unclassified";
 
@@ -49,7 +49,7 @@ pub struct CertSummary {
     /// SHA-256 fingerprint colon-separated.
     pub sha256: Option<String>,
     /// SCT count.
-    pub ct_logs: Option<String>, // "✓ 2 SCTs embedded" or "—"
+    pub ct_logs: Option<String>, // "2 scts embedded", or "none"
 }
 
 /// Fingerprints for display.
@@ -65,14 +65,14 @@ pub struct Fingerprints {
     pub lookup: Option<String>,
 }
 
-/// Live mode report — what `grip example.com` renders.
+/// The live mode report, which is what `grip example.com` renders.
 #[derive(Debug, Clone, Serialize)]
 pub struct LiveReport {
     /// Target (host:port).
     pub target: String,
     /// Negotiated info.
     pub negotiated: NegotiatedInfo,
-    /// Certificate summary (None if no cert parsed) — leaf.
+    /// Certificate summary (None if no cert parsed), leaf.
     pub certificate: Option<CertSummary>,
     /// Full chain when `--cert-chain` is set (leaf + intermediates).
     pub cert_chain: Option<Vec<CertSummary>>,
@@ -80,7 +80,7 @@ pub struct LiveReport {
     pub fingerprints: Fingerprints,
     /// Raw hex dump (only if --raw).
     pub raw: Option<RawHex>,
-    /// Verbose transparency info (timings, bytes) — only if --verbose.
+    /// Verbose transparency info (timings, bytes), only if --verbose.
     pub verbose_info: Option<VerboseInfo>,
 }
 

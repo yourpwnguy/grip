@@ -1,4 +1,4 @@
-//! Pcap file reader — parses global header and packet records.
+//! The pcap file reader: parses the global header and the packet records.
 //!
 //! Supports all four magic variants (micro/nano, LE/BE) and validates
 //! `incl_len <= orig_len` and `incl_len <= snaplen`. The reader is an

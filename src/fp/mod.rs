@@ -1,4 +1,4 @@
-//! Fingerprint computation — pure functions over parsed `ClientHello`/`ServerHello`.
+//! Fingerprint computation: pure functions over parsed `ClientHello`/`ServerHello`.
 
 pub mod ja3;
 pub mod ja4;

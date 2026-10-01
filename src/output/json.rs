@@ -1,4 +1,4 @@
-//! JSON rendering — single call to `serde_json`.
+//! JSON rendering: a single call into `serde_json`.
 
 use serde::Serialize;
 

@@ -1,4 +1,4 @@
-//! CLI validation — cross-field checks that `clap` alone can't express.
+//! CLI validation: the cross-field checks `clap` alone can't express.
 
 use crate::cli::args::Cli;
 use crate::error::{GripError, GripResult};
@@ -52,10 +52,6 @@ pub fn validate(cli: &Cli) -> GripResult<Mode> {
     if cli.unique && cli.pcap.is_none() {
         return Err(GripError::invalid_arg("--unique requires --pcap"));
     }
-    // sort_by is always set (default), but if user explicitly passed a non-default with live mode we should warn?
-    // We allow it but ignore for live — keep strict: if live and sort_by != default via CLI? Can't detect default vs explicit without clap internals.
-    // So we just allow but it has no effect for live.
-
     match (&cli.target, &cli.pcap) {
         (Some(t), None) => {
             if t.trim().is_empty() {

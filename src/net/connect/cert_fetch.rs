@@ -1,4 +1,4 @@
-//! Certificate fallback — `rustls` handshake to recover the chain when the
+//! Certificate fallback: a `rustls` handshake to recover the chain when the
 //! raw capture cannot (TLS 1.3 encrypts `Certificate`).
 
 use std::net::TcpStream;

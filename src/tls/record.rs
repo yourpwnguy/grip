@@ -7,7 +7,7 @@
 //! Byte 3-4    Length          u16 BE, how many bytes follow
 //! Byte 5+     Payload
 //! ```
-//! We parse and validate that header here. The payload is left opaque —
+//! We parse and validate that header here. The payload is left opaque.
 //! `client_hello` / `server_hello` parse it further.
 //!
 //! # Security
@@ -19,15 +19,15 @@ use crate::error::{GripError, GripResult, ParseKind};
 /// TLS content type (first byte of record header).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentType {
-    /// `0x14` — `ChangeCipherSpec`.
+    /// `0x14`, `ChangeCipherSpec`.
     ChangeCipherSpec,
-    /// `0x15` — Alert.
+    /// `0x15`, Alert.
     Alert,
-    /// `0x16` — Handshake (`ClientHello`, `ServerHello`, etc.).
+    /// `0x16`, Handshake (`ClientHello`, `ServerHello`, etc.).
     Handshake,
-    /// `0x17` — `ApplicationData`.
+    /// `0x17`, `ApplicationData`.
     ApplicationData,
-    /// Unknown type — preserved, not error, so we can skip it.
+    /// Unknown type, preserved, not error, so we can skip it.
     Unknown(u8),
 }
 
@@ -122,7 +122,7 @@ impl TlsRecord {
     /// Parse all records in `buf` (e.g. a reassembled TCP stream).
     ///
     /// Stops at the first parse error. Unknown content types are returned as
-    /// `TlsRecord` with `Unknown` — the caller decides whether to skip them.
+    /// `TlsRecord` with `Unknown`, the caller decides whether to skip them.
     ///
     /// # Errors
     ///
@@ -134,7 +134,7 @@ impl TlsRecord {
         while pos < buf.len() {
             // Need at least header.
             if buf.len() - pos < 5 {
-                break; // trailing partial record — not an error for stream scanning
+                break; // trailing partial record, not an error for stream scanning
             }
             let (rec, consumed) = Self::parse(&buf[pos..], pos)?;
             records.push(rec);

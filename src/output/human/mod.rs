@@ -1,4 +1,4 @@
-//! Human report rendering — composes [`crate::ui::panel`] sections.
+//! Human report rendering. Composes [`crate::ui::panel`] sections.
 //!
 //! The report is split by mode so each pipeline owns only the view it
 //! renders. `live.rs` and `pcap.rs` take DTOs, never domain types, so every

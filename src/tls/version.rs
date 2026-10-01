@@ -3,7 +3,7 @@
 //! The `legacy_version` field in ClientHello/ServerHello lies for TLS 1.3:
 //! it always reads `0x0303` (TLS 1.2). The real version is inside the
 //! `supported_versions` extension (`0x002b`). If you infer version from
-//! the legacy field you'll label every TLS 1.3 client as 1.2 — the most
+//! the legacy field, you label every TLS 1.3 client as 1.2. That is the most
 //! common fingerprinting bug.
 //!
 //! This module centralizes that logic so parsers can't get it wrong.
@@ -13,15 +13,15 @@ use crate::tls::extensions::Extension;
 /// TLS protocol version as seen on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TlsVersion {
-    /// SSL 3.0 — `0x0300`, rarely seen.
+    /// SSL 3.0, `0x0300`, rarely seen.
     Ssl30,
-    /// TLS 1.0 — `0x0301`.
+    /// TLS 1.0, `0x0301`.
     Tls10,
-    /// TLS 1.1 — `0x0302`.
+    /// TLS 1.1, `0x0302`.
     Tls11,
-    /// TLS 1.2 — `0x0303`.
+    /// TLS 1.2, `0x0303`.
     Tls12,
-    /// TLS 1.3 — `0x0304`.
+    /// TLS 1.3, `0x0304`.
     Tls13,
     /// Unknown / future version.
     Unknown(u16),

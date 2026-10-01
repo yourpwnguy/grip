@@ -1,4 +1,4 @@
-//! Pcap analysis pipeline — file → reassembled streams → `ClientHellos`.
+//! The pcap analysis pipeline: file → reassembled streams → `ClientHellos`.
 
 pub mod extractor;
 pub mod reader;

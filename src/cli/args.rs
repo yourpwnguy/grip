@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 
-/// grip — TLS handshake inspector + fingerprinter
+/// grip, TLS handshake inspector + fingerprinter
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "grip",
@@ -94,7 +94,7 @@ pub struct Cli {
     pub sort_by: SortBy,
 
     // ── Verbosity / UI ──
-    /// Verbose output — show dns, timing, and certificate detail on stderr
+    /// Verbose output, show dns, timing, and certificate detail on stderr
     #[arg(long, short, action = clap::ArgAction::Count)]
     pub verbose: u8,
 }

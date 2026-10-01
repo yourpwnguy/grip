@@ -21,19 +21,19 @@ use crate::error::{GripError, GripResult, ParseKind};
 /// A parsed TLS extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Extension {
-    /// `0x0000` — Server Name Indication.
+    /// `0x0000`, Server Name Indication.
     Sni(String),
-    /// `0x000a` — Supported Groups (elliptic curves).
+    /// `0x000a`, Supported Groups (elliptic curves).
     SupportedGroups(Vec<u16>),
-    /// `0x000b` — EC Point Formats.
+    /// `0x000b`, EC Point Formats.
     EcPointFormats(Vec<u8>),
-    /// `0x000d` — Signature Algorithms.
+    /// `0x000d`, Signature Algorithms.
     SignatureAlgorithms(Vec<u16>),
-    /// `0x0010` — Application-Layer Protocol Negotiation.
+    /// `0x0010`, Application-Layer Protocol Negotiation.
     Alpn(Vec<String>),
-    /// `0x002b` — Supported Versions.
+    /// `0x002b`, Supported Versions.
     SupportedVersions(Vec<u16>),
-    /// `0x0033` — Key Share.
+    /// `0x0033`, Key Share.
     KeyShare(Vec<KeyShareEntry>),
     /// Any other extension or a known one we chose to keep opaque.
     Unknown(u16, Vec<u8>),
@@ -68,7 +68,7 @@ impl Extension {
 /// Parse a raw extensions block into [`Extension`] values.
 ///
 /// `buf` must be exactly the extensions bytes (without the 2-byte length
-/// prefix — the caller strips it).
+/// prefix, the caller strips it).
 ///
 /// Returns the extensions in wire order.
 ///

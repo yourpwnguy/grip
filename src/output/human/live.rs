@@ -1,4 +1,4 @@
-//! Live report — the `grip example.com` view.
+//! The live report: the `grip example.com` view.
 //!
 //! Sections are stacked tightly: a titled rule, then rows. The certificate
 //! section absorbs the chain (`--cert-chain`), because intermediates are just

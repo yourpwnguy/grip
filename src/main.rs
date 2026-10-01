@@ -1,6 +1,6 @@
 //! Binary entry point for `grip`.
 //!
-//! This file is intentionally tiny — all logic lives in `grip::cli::run`
+//! This file is intentionally tiny: all the logic lives in `grip::cli::run`
 //! so it can be unit-tested without spawning a process. We parse `Cli`,
 //! call `run`, and map errors to a pretty message + exit code.
 

@@ -1,3 +1,3 @@
-//! Live networking — TCP connect + TLS handshake capture.
+//! Live networking: the TCP connect plus the TLS handshake capture.
 
 pub mod connect;
