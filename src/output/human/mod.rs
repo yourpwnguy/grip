@@ -17,7 +17,7 @@ pub use quiet::render_quiet;
 mod tests {
     use super::*;
     use crate::output::model::*;
-    use crate::ui::panel::DEFAULT_WIDTH;
+    use crate::ui::panel::{DEFAULT_WIDTH, MIN_WIDTH};
     use crate::ui::theme::Palette;
 
     fn live_report() -> LiveReport {
@@ -201,5 +201,52 @@ mod tests {
         let mut b = Vec::new();
         render_quiet("t13d", &mut b).unwrap();
         assert_eq!(String::from_utf8(b).unwrap(), "t13d\n");
+    }
+
+    #[test]
+    fn raw_decoded_values_wrap_instead_of_overflowing() {
+        // Cipher suite lists are the long one in practice, they run to a few
+        // hundred chars and used to blow straight past the terminal edge.
+        let long = (0..40)
+            .map(|i| format!("0x{:04x}", 0x1300 + i))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let raw = RawHex {
+            client_hello_hex: "1603010001".to_string(),
+            server_hello_hex: "1603010002".to_string(),
+            client_hello_parsed: format!("cipher suites: {long}"),
+        };
+
+        for width in [MIN_WIDTH, DEFAULT_WIDTH] {
+            let mut b = Vec::new();
+            super::raw::render_raw(&raw, &mut b, Palette::plain(), width).unwrap();
+            let s = String::from_utf8(b).unwrap();
+            for line in s.lines() {
+                assert!(
+                    line.chars().count() <= width,
+                    "line overflows width {width}: {line:?}"
+                );
+            }
+
+            // Every token survives the wrap, so nothing got clipped.
+            for i in 0..40 {
+                let token = format!("0x{:04x}", 0x1300 + i);
+                assert_eq!(s.matches(&token).count(), 1, "{token} missing or doubled");
+            }
+
+            // Continuation lines rejoin under the value column.
+            let conts = s
+                .lines()
+                .filter(|l| l.starts_with(' ') && l.trim_start().starts_with("0x"))
+                .collect::<Vec<_>>();
+            assert!(!conts.is_empty(), "expected at least one wrapped line");
+            for line in conts {
+                assert_eq!(
+                    line.chars().take_while(|c| *c == ' ').count(),
+                    23,
+                    "continuation misaligned: {line:?}"
+                );
+            }
+        }
     }
 }

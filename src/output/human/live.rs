@@ -44,7 +44,7 @@ pub fn render_live(
         writeln!(w, "{l}")?;
     }
     if let Some(raw) = &report.raw {
-        super::raw::render_raw(raw, w, p)?;
+        super::raw::render_raw(raw, w, p, width)?;
     }
     Ok(())
 }
