@@ -12,16 +12,14 @@ pub fn parse(data: &[u8]) -> Result<Vec<u16>, ParseKind> {
         return Ok(Vec::new());
     }
     // ClientHello style: 1-byte len prefix
-    if !data.is_empty() {
-        let list_len = data[0] as usize;
-        if list_len + 1 == data.len() && list_len.is_multiple_of(2) {
-            return Ok(data[1..]
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|c| u16::from_be_bytes(*c))
-                .collect());
-        }
+    let list_len = data[0] as usize;
+    if list_len + 1 == data.len() && list_len.is_multiple_of(2) {
+        return Ok(data[1..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_be_bytes(*c))
+            .collect());
     }
     // ServerHello single version
     if data.len() == 2 {

@@ -1,4 +1,4 @@
-//! TLS parsing domain — raw byte handling with no I/O.
+//! TLS parsing domain: raw byte handling with no I/O.
 //!
 //! This is the heart of `grip`. Every byte is read from the wire and
 //! validated here; no TLS library does the work for us (except ASN.1 via
@@ -11,6 +11,7 @@ pub mod builder;
 pub mod certificate;
 pub mod cipher;
 pub mod client_hello;
+mod cursor;
 pub mod extensions;
 pub mod grease;
 pub mod record;

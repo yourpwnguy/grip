@@ -12,12 +12,13 @@
 //! ..     Cipher Suites (each 2)
 //! ..     Compression Methods Length (1)
 //! ..     Compression Methods
-//! ..     Extensions Length (2) — may be absent if no extensions
+//! ..     Extensions Length (2), may be absent if no extensions
 //! ..     Extensions
 //! ```
 //! All length prefixes are validated. The raw bytes are retained for
 //! `--raw` and for fingerprint hashing that needs the original.
 
+use super::cursor::Cursor;
 use crate::error::{GripError, GripResult, ParseKind};
 use crate::tls::extensions::{Extension, parse_extensions};
 use crate::tls::record::{ContentType, TlsRecord};
@@ -31,7 +32,7 @@ pub struct ClientHello {
     pub random: [u8; 32],
     /// Session ID (may be empty for TLS 1.3).
     pub session_id: Vec<u8>,
-    /// Cipher suites as sent (GREASE still present — callers filter).
+    /// Cipher suites as sent (GREASE still present, callers filter).
     pub cipher_suites: Vec<u16>,
     /// Compression methods (usually `[0]`).
     pub compression_methods: Vec<u8>,
@@ -97,7 +98,7 @@ impl ClientHello {
                 ParseKind::Malformed(format!("handshake type 0x{:02x} != 0x01", buf[0])),
             ));
         }
-        let hs_len = ((buf[1] as usize) << 16) | ((buf[2] as usize) << 8) | (buf[3] as usize);
+        let hs_len = usize::from(buf[1]) << 16 | usize::from(buf[2]) << 8 | usize::from(buf[3]);
         if buf.len() < 4 + hs_len {
             return Err(GripError::parse(
                 1,
@@ -113,148 +114,55 @@ impl ClientHello {
     }
 
     fn parse_body(body: &[u8], raw: Vec<u8>) -> GripResult<Self> {
-        let mut pos = 0;
+        // The 4 skips the handshake header; error offsets point into the full
+        // message so they line up with a hex dump.
+        let mut c = Cursor::new(body, 4);
 
-        // ClientVersion (2)
-        if body.len() < 2 {
-            return Err(GripError::parse(
-                4,
-                ParseKind::UnexpectedEof {
-                    needed: 2,
-                    available: body.len(),
-                },
-            ));
-        }
-        let legacy_version = u16::from_be_bytes([body[0], body[1]]);
-        pos += 2;
-
-        // Random (32)
-        if body.len() < pos + 32 {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: 32,
-                    available: body.len() - pos,
-                },
-            ));
-        }
+        let legacy_version = c.u16()?;
         let mut random = [0u8; 32];
-        random.copy_from_slice(&body[pos..pos + 32]);
-        pos += 32;
+        random.copy_from_slice(c.take(32)?);
 
-        // Session ID
-        if body.len() < pos + 1 {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: 1,
-                    available: body.len() - pos,
-                },
-            ));
-        }
-        let session_id_len = body[pos] as usize;
-        pos += 1;
-        if body.len() < pos + session_id_len {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: session_id_len,
-                    available: body.len() - pos,
-                },
-            ));
-        }
-        let session_id = body[pos..pos + session_id_len].to_vec();
-        pos += session_id_len;
+        let session_id_len = c.u8()? as usize;
+        let session_id = c.vec(session_id_len)?;
 
-        // Cipher Suites
-        if body.len() < pos + 2 {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: 2,
-                    available: body.len() - pos,
-                },
-            ));
-        }
-        let cs_len = u16::from_be_bytes([body[pos], body[pos + 1]]) as usize;
-        pos += 2;
+        let cs_len = c.u16()? as usize;
         if !cs_len.is_multiple_of(2) {
             return Err(GripError::parse(
-                4 + pos - 2,
+                c.offset(),
                 ParseKind::OddCipherSuiteLength(cs_len),
             ));
         }
-        if body.len() < pos + cs_len {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: cs_len,
-                    available: body.len() - pos,
-                },
-            ));
-        }
-        let mut cipher_suites = Vec::with_capacity(cs_len / 2);
-        for chunk in body[pos..pos + cs_len].as_chunks::<2>().0 {
-            cipher_suites.push(u16::from_be_bytes(*chunk));
-        }
-        pos += cs_len;
+        let cipher_suites = c
+            .take(cs_len)?
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|ch| u16::from_be_bytes(*ch))
+            .collect();
 
-        // Compression Methods
-        if body.len() < pos + 1 {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: 1,
-                    available: body.len() - pos,
-                },
-            ));
-        }
-        let comp_len = body[pos] as usize;
-        pos += 1;
-        if body.len() < pos + comp_len {
-            return Err(GripError::parse(
-                4 + pos,
-                ParseKind::UnexpectedEof {
-                    needed: comp_len,
-                    available: body.len() - pos,
-                },
-            ));
-        }
-        let compression_methods = body[pos..pos + comp_len].to_vec();
-        pos += comp_len;
+        let comp_len = c.u8()? as usize;
+        let compression_methods = c.vec(comp_len)?;
 
-        // Extensions (optional — if no bytes left, no extensions)
-        let extensions = if pos < body.len() {
-            if body.len() < pos + 2 {
+        // Extensions are optional: a ClientHello with no bytes left simply has
+        // none, which is legal.
+        let extensions = if c.remaining() >= 2 {
+            let ext_total_len = c.u16()? as usize;
+            if c.remaining() < ext_total_len {
                 return Err(GripError::parse(
-                    4 + pos,
-                    ParseKind::UnexpectedEof {
-                        needed: 2,
-                        available: body.len() - pos,
-                    },
-                ));
-            }
-            let ext_total_len = u16::from_be_bytes([body[pos], body[pos + 1]]) as usize;
-            pos += 2;
-            if body.len() < pos + ext_total_len {
-                return Err(GripError::parse(
-                    4 + pos,
+                    c.offset(),
                     ParseKind::ExtensionsLengthMismatch {
                         declared: ext_total_len,
-                        actual: body.len() - pos,
+                        actual: c.remaining(),
                     },
                 ));
             }
-            // Exact consumption check: extensions parsing must consume exactly ext_total_len
-            let ext_bytes = &body[pos..pos + ext_total_len];
-            let exts = parse_extensions(ext_bytes)?;
-            // Future: if body has trailing bytes after extensions, it's an error
-            if pos + ext_total_len != body.len() {
+            let exts = parse_extensions(c.take(ext_total_len)?)?;
+            if c.remaining() > 0 {
                 return Err(GripError::parse(
-                    4 + pos,
+                    c.offset(),
                     ParseKind::Malformed(format!(
                         "trailing bytes after extensions: {}",
-                        body.len() - (pos + ext_total_len)
+                        c.remaining()
                     )),
                 ));
             }

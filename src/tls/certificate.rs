@@ -3,7 +3,7 @@
 //! After `ServerHello` the server sends a `Certificate` handshake message.
 //! For `grip` we only need the leaf + intermediates to display subject,
 //! issuer, SANs, expiry, and to compute SHA-256 fingerprints. We delegate
-//! ASN.1/DER parsing to `x509-parser` — hand-rolling ASN.1 is a classic
+//! ASN.1/DER parsing to `x509-parser`, hand-rolling ASN.1 is a classic
 //! source of critical vulns.
 //!
 //! # Limits
@@ -30,7 +30,7 @@ pub struct CertInfo {
     pub not_before: DateTime<Utc>,
     /// SHA-256 fingerprint of the DER bytes (colon-separated hex).
     pub sha256_fingerprint: String,
-    /// Number of embedded SCTs (Certificate Transparency) — extracted from
+    /// Number of embedded SCTs (Certificate Transparency), extracted from
     /// the `1.3.6.1.4.1.11129.2.4.2` extension if present.
     pub sct_count: usize,
     /// Is self-signed?
@@ -40,6 +40,12 @@ pub struct CertInfo {
 /// A chain of certificates as sent by the server.
 #[derive(Debug, Clone)]
 pub struct CertificateChain(pub Vec<CertInfo>);
+
+/// Read a 3-byte big-endian length. TLS uses this for handshake lengths and
+/// the certificate list length, so it shows up a few times in here.
+fn len24(b: &[u8]) -> usize {
+    usize::from(b[0]) << 16 | usize::from(b[1]) << 8 | usize::from(b[2])
+}
 
 impl CertificateChain {
     /// Maximum certs in a chain we will parse.
@@ -70,7 +76,7 @@ impl CertificateChain {
                     "Certificate handshake too short".to_string(),
                 ));
             }
-            let len = ((buf[1] as usize) << 16) | ((buf[2] as usize) << 8) | (buf[3] as usize);
+            let len = len24(&buf[1..]);
             if buf.len() < 4 + len {
                 return Err(GripError::Certificate(
                     "Certificate length exceeds buffer".to_string(),
@@ -91,15 +97,11 @@ impl CertificateChain {
             if ctx_len + 1 + 3 <= body.len() {
                 let after_ctx = &body[1 + ctx_len..];
                 if after_ctx.len() >= 3 {
-                    let list_len = ((after_ctx[0] as usize) << 16)
-                        | ((after_ctx[1] as usize) << 8)
-                        | (after_ctx[2] as usize);
+                    let list_len = len24(after_ctx);
                     if list_len + 3 == after_ctx.len() {
                         after_ctx
                     } else if body.len() >= 3 {
-                        let list_len2 = ((body[0] as usize) << 16)
-                            | ((body[1] as usize) << 8)
-                            | (body[2] as usize);
+                        let list_len2 = len24(body);
                         if list_len2 + 3 == body.len() {
                             body
                         } else {
@@ -121,9 +123,7 @@ impl CertificateChain {
                 "Certificate certs_len missing".to_string(),
             ));
         }
-        let total_len = ((certs_bytes[0] as usize) << 16)
-            | ((certs_bytes[1] as usize) << 8)
-            | (certs_bytes[2] as usize);
+        let total_len = len24(certs_bytes);
         if total_len + 3 > certs_bytes.len() {
             return Err(GripError::Certificate(format!(
                 "Certificate total_len {total_len} exceeds available {}",
@@ -137,17 +137,8 @@ impl CertificateChain {
             if certs.len() >= Self::MAX_CHAIN_LEN {
                 break; // cap
             }
-            let cert_len = ((certs_bytes[pos] as usize) << 16)
-                | ((certs_bytes[pos + 1] as usize) << 8)
-                | (certs_bytes[pos + 2] as usize);
+            let cert_len = len24(&certs_bytes[pos..]);
             pos += 3;
-            // For TLS 1.3 each cert has 2-byte extensions after DER — skip them.
-            // We need to handle that: cert_len is DER len, then 2-byte ext len + ext bytes.
-            if pos + cert_len > end && pos + cert_len > certs_bytes.len() {
-                return Err(GripError::Certificate(format!(
-                    "cert_len {cert_len} exceeds buffer"
-                )));
-            }
             if pos + cert_len > certs_bytes.len() {
                 break;
             }
@@ -267,7 +258,7 @@ fn parse_single_cert(der: &[u8]) -> GripResult<CertInfo> {
         .join(":");
 
     // SCT count from extension 1.3.6.1.4.1.11129.2.4.2
-    let sct_count = count_scts(&cert, der);
+    let sct_count = count_scts(&cert);
 
     let is_self_signed = subject == issuer;
 
@@ -303,7 +294,7 @@ fn extract_sans(cert: &X509Certificate<'_>) -> Vec<String> {
     sans
 }
 
-fn count_scts(cert: &X509Certificate<'_>, _der: &[u8]) -> usize {
+fn count_scts(cert: &X509Certificate<'_>) -> usize {
     // OID for SCT list: 1.3.6.1.4.1.11129.2.4.2
     for ext in cert.extensions() {
         if ext.oid.to_string() == "1.3.6.1.4.1.11129.2.4.2" {

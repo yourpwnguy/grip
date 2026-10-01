@@ -18,21 +18,13 @@ pub fn parse(data: &[u8]) -> Result<Vec<KeyShareEntry>, ParseKind> {
     }
     let list_len = u16::from_be_bytes([data[0], data[1]]) as usize;
 
-    // ClientHello: list_len + 2 == data.len()
+    // ClientHello: the declared list length usually consumes the rest.
     if list_len + 2 == data.len() {
         return parse_list(data, 2, 2 + list_len);
     }
-    if list_len + 2 > data.len() {
-        // Not a valid list — try single entry
-    } else if list_len + 2 < data.len() {
-        // Could be list with trailing? Try list parse
-        if let Ok(v) = parse_list(data, 2, 2 + list_len) {
-            // Ensure it consumed exactly
-            if v.iter().map(|e| 4 + e.key_exchange.len()).sum::<usize>() + 2 == data.len() {
-                return Ok(v);
-            }
-        }
-    }
+
+    // Anything else is a ServerHello single entry (or garbage): the first two
+    // bytes here are the group id, not a list length.
     // ServerHello single entry
     if data.len() >= 4 {
         let group = u16::from_be_bytes([data[0], data[1]]);

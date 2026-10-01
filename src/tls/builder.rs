@@ -140,105 +140,80 @@ impl ClientHelloBuilder {
     fn build_extensions(&self) -> Vec<u8> {
         let mut out = Vec::new();
 
-        // SNI (0x0000)
+        // Every extension is `type(2) || len(2) || payload`, so this does the
+        // framing and we just hand over the payload.
+        let mut push = |ext_type: u16, data: &[u8]| {
+            out.extend_from_slice(&ext_type.to_be_bytes());
+            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
+            out.extend_from_slice(data);
+        };
+
+        // SNI (0x0000): list_len || name_type=0 || name_len || hostname
         if let Some(sni) = &self.sni {
             let host = sni.as_bytes();
             let mut data = Vec::new();
-            let entry_len = 1 + 2 + host.len(); // type + len + host
-            data.extend_from_slice(&((entry_len) as u16).to_be_bytes()); // list len
-            data.push(0x00); // name_type host_name
+            data.extend_from_slice(&((1 + 2 + host.len()) as u16).to_be_bytes());
+            data.push(0x00);
             data.extend_from_slice(&(host.len() as u16).to_be_bytes());
             data.extend_from_slice(host);
-            out.extend_from_slice(&0x0000u16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
+            push(0x0000, &data);
         }
 
         // Supported Groups (0x000a)
-        {
-            let mut data = Vec::new();
-            data.extend_from_slice(&((self.supported_groups.len() * 2) as u16).to_be_bytes());
-            for g in &self.supported_groups {
-                data.extend_from_slice(&g.to_be_bytes());
-            }
-            out.extend_from_slice(&0x000au16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
-        }
+        push(0x000a, &u16_list(&self.supported_groups));
 
-        // EC Point Formats (0x000b)
-        {
-            let data = vec![0x01, 0x00]; // uncompressed
-            out.extend_from_slice(&0x000bu16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
-        }
+        // EC Point Formats (0x000b): just "uncompressed"
+        push(0x000b, &[0x01, 0x00]);
 
         // Signature Algorithms (0x000d)
-        {
-            let mut data = Vec::new();
-            data.extend_from_slice(&((self.signature_algorithms.len() * 2) as u16).to_be_bytes());
-            for sa in &self.signature_algorithms {
-                data.extend_from_slice(&sa.to_be_bytes());
-            }
-            out.extend_from_slice(&0x000du16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
-        }
+        push(0x000d, &u16_list(&self.signature_algorithms));
 
-        // ALPN (0x0010)
+        // ALPN (0x0010): list_len || [len || proto]*
         if !self.alpn.is_empty() {
             let mut inner = Vec::new();
             for proto in &self.alpn {
                 inner.push(proto.len() as u8);
                 inner.extend_from_slice(proto.as_bytes());
             }
-            let mut data = Vec::new();
+            let mut data = Vec::with_capacity(inner.len() + 2);
             data.extend_from_slice(&(inner.len() as u16).to_be_bytes());
             data.extend_from_slice(&inner);
-            out.extend_from_slice(&0x0010u16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
+            push(0x0010, &data);
         }
 
-        // Supported Versions (0x002b)
-        {
-            let mut data = Vec::new();
-            data.push((self.supported_versions.len() * 2) as u8);
-            for v in &self.supported_versions {
-                data.extend_from_slice(&v.to_be_bytes());
-            }
-            out.extend_from_slice(&0x002bu16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
+        // Supported Versions (0x002b): 1-byte length prefix here, not 2
+        let mut versions = Vec::new();
+        versions.push((self.supported_versions.len() * 2) as u8);
+        for v in &self.supported_versions {
+            versions.extend_from_slice(&v.to_be_bytes());
         }
+        push(0x002b, &versions);
 
-        // Key Share (0x0033) — minimal, one group with dummy 32-byte key
-        {
-            let mut ks_entries = Vec::new();
-            for g in &self.key_share_groups {
-                ks_entries.extend_from_slice(&g.to_be_bytes());
-                ks_entries.extend_from_slice(&32u16.to_be_bytes());
-                ks_entries.extend_from_slice(&[0x42; 32]); // dummy key
-            }
-            let mut data = Vec::new();
-            data.extend_from_slice(&(ks_entries.len() as u16).to_be_bytes());
-            data.extend_from_slice(&ks_entries);
-            out.extend_from_slice(&0x0033u16.to_be_bytes());
-            out.extend_from_slice(&(data.len() as u16).to_be_bytes());
-            out.extend_from_slice(&data);
+        // Key Share (0x0033). The key bytes are a fixed dummy: we need a
+        // structurally valid entry. The actual ECDH happens in nobody's favor.
+        let mut ks = Vec::new();
+        for g in &self.key_share_groups {
+            ks.extend_from_slice(&g.to_be_bytes());
+            ks.extend_from_slice(&32u16.to_be_bytes());
+            ks.extend_from_slice(&[0x42; 32]);
         }
-
-        // PSK Key Exchange Modes (0x002d) + psk? keep minimal
-        // Add a grease extension to test handling: 0x0a0a
-        // (Uncomment to test GREASE filtering — default disabled to keep fingerprint stable)
-        // {
-        //     out.extend_from_slice(&0x0a0au16.to_be_bytes());
-        //     out.extend_from_slice(&0u16.to_be_bytes());
-        // }
+        let mut ks_data = Vec::with_capacity(ks.len() + 2);
+        ks_data.extend_from_slice(&(ks.len() as u16).to_be_bytes());
+        ks_data.extend_from_slice(&ks);
+        push(0x0033, &ks_data);
 
         out
     }
+}
+
+/// `len(2) || u16*`, the shape most extension payloads use.
+fn u16_list(values: &[u16]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(values.len() * 2 + 2);
+    out.extend_from_slice(&((values.len() * 2) as u16).to_be_bytes());
+    for v in values {
+        out.extend_from_slice(&v.to_be_bytes());
+    }
+    out
 }
 
 #[cfg(test)]
