@@ -27,15 +27,12 @@ pub fn format_expiry(not_after: DateTime<Utc>) -> String {
     if days_display >= 0 {
         format!("{date}   ({days_display} days)")
     } else {
-        format!("{date}   (expired {days_display} days ago)")
+        // `days_display` is negative here, so flip it for display.
+        format!(
+            "{date}   (expired {abs_days} days ago)",
+            abs_days = days_display.abs()
+        )
     }
-}
-
-/// Simple helper for tests — returns just the date part.
-#[cfg(test)]
-#[must_use]
-pub fn format_date_only(not_after: DateTime<Utc>) -> String {
-    not_after.format("%Y-%m-%d").to_string()
 }
 
 #[cfg(test)]
