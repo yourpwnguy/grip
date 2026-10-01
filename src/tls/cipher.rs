@@ -1,23 +1,8 @@
-//! Cipher suite constants and display helpers.
+//! Cipher suite id to name mapping.
 //!
-//! We expose the IANA-registered cipher suite ids most commonly seen in
-//! `ClientHellos`. Unknown ids are still handled (displayed as `0xXXXX`)
-//! — we never fail on an unknown cipher, we just lack a friendly name.
+//! IANA names for the cipher suites we care about. Unknown ids fall back to
+//! hex at the call site, so we never fail on an unknown cipher.
 //!
-//! This module has no dependencies and is `no_std` compatible in principle.
-
-/// Well-known cipher suite ids.
-#[allow(missing_docs)]
-pub mod id {
-    pub const TLS_AES_128_GCM_SHA256: u16 = 0x1301;
-    pub const TLS_AES_256_GCM_SHA384: u16 = 0x1302;
-    pub const TLS_CHACHA20_POLY1305_SHA256: u16 = 0x1303;
-    pub const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: u16 = 0xc02b;
-    pub const TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384: u16 = 0xc02c;
-    pub const TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: u16 = 0xc02b; // alias examples
-    pub const TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256: u16 = 0xcca8;
-    pub const TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256: u16 = 0xcca9;
-}
 
 /// Return the IANA name for a cipher suite, or `None` if unknown.
 ///
@@ -58,14 +43,6 @@ pub const fn name(id: u16) -> Option<&'static str> {
     })
 }
 
-/// Format a cipher suite id as either its IANA name or hex.
-///
-/// This is infallible and allocation-free for the hex case beyond the returned `String`.
-#[must_use]
-pub fn display(id: u16) -> String {
-    name(id).map_or_else(|| format!("0x{id:04x}"), ToString::to_string)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,11 +55,5 @@ mod tests {
     #[test]
     fn unknown_name() {
         assert_eq!(name(0xffff), None);
-    }
-
-    #[test]
-    fn display_fallback() {
-        assert_eq!(display(0xffff), "0xffff");
-        assert_eq!(display(0x1301), "TLS_AES_128_GCM_SHA256");
     }
 }

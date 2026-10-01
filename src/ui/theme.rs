@@ -1,14 +1,14 @@
-//! Design system — truecolor palette, gradients, glyphs.
+//! Design system, truecolor palette, gradients, glyphs.
 //!
 //! `grip` = a mechanical claw closing on a handshake. The palette is built
 //! from that idea: cold hydraulic steel (slate/cyan) for structure, hot
 //! amber/magenta for the moment of the grab, green for a clean catch.
 //!
 //! # Why hand-rolled ANSI instead of a styling crate
-//! We need per-character gradients (each glyph a different color) for the
-//! animated rules and the mascot. Style crates model "a style per span",
-//! which forces one `format!` per character anyway. Emitting SGR sequences
-//! directly is fewer allocations and gives exact control.
+//! The section rules fade along their length, so every glyph needs its own
+//! color. Style crates model "a style per span", which means one `format!`
+//! per character anyway. Emitting SGR sequences straight into one `String`
+//! is fewer allocations and gives exact control.
 //!
 //! Every function is a no-op when `Palette::plain()` is used, so piped
 //! output and snapshot tests stay byte-stable.
@@ -37,7 +37,7 @@ impl Rgb {
     }
 }
 
-/// The `grip` palette — hydraulic steel with a hot grab.
+/// The `grip` palette, hydraulic steel with a hot grab.
 pub mod pal {
     use super::Rgb;
 
@@ -49,13 +49,13 @@ pub mod pal {
     pub const MIST: Rgb = Rgb(0x8a, 0x9a, 0xb8);
     /// Primary values.
     pub const CHROME: Rgb = Rgb(0xdf, 0xe7, 0xf5);
-    /// Cold accent — the claw at rest.
+    /// Cold accent, the claw at rest.
     pub const CYAN: Rgb = Rgb(0x35, 0xd7, 0xd0);
     /// Cool mid accent.
     pub const AZURE: Rgb = Rgb(0x4c, 0x9a, 0xf5);
-    /// Hot accent — the moment of the grip.
+    /// Hot accent, the moment of the grip.
     pub const AMBER: Rgb = Rgb(0xff, 0xb3, 0x47);
-    /// Signature accent — fingerprints.
+    /// Signature accent, fingerprints.
     pub const MAGENTA: Rgb = Rgb(0xe8, 0x5d, 0xd6);
     /// Clean catch.
     pub const LIME: Rgb = Rgb(0x6d, 0xe8, 0x8f);
@@ -79,7 +79,7 @@ impl Palette {
         Self { color: true }
     }
 
-    /// No escape sequences at all — for pipes, files, and snapshot tests.
+    /// No escape sequences at all, for pipes, files, and snapshot tests.
     #[must_use]
     pub const fn plain() -> Self {
         Self { color: false }
@@ -95,12 +95,6 @@ impl Palette {
             return Self::rich();
         }
         if is_tty { Self::rich() } else { Self::plain() }
-    }
-
-    /// True when escape codes are emitted.
-    #[must_use]
-    pub const fn is_color(self) -> bool {
-        self.color
     }
 
     /// Paint `text` in `fg`.
@@ -132,10 +126,9 @@ impl Palette {
 
     /// Paint each character of `text` along a gradient from `from` to `to`.
     ///
-    /// This is what makes the rules and the mascot feel alive: one SGR per
-    /// glyph. Cost is O(chars) allocations into a single pre-sized `String`,
-    /// which is irrelevant at our scale (a few hundred chars per frame) and
-    /// is skipped entirely in plain mode.
+    /// This is what makes the rules feel alive: one SGR per glyph. All of it
+    /// lands in a single pre-sized `String`, so the cost is one allocation,
+    /// and plain mode skips the work entirely.
     #[must_use]
     pub fn gradient(self, text: &str, from: Rgb, to: Rgb) -> String {
         if !self.color {
@@ -155,52 +148,16 @@ impl Palette {
         out.push_str("\x1b[0m");
         out
     }
-
-    /// A gradient whose phase is shifted by `phase` — animates when called
-    /// repeatedly with an increasing phase. Produces a travelling shimmer.
-    #[must_use]
-    pub fn gradient_shift(self, text: &str, from: Rgb, to: Rgb, phase: f32) -> String {
-        if !self.color {
-            return text.to_string();
-        }
-        let chars: Vec<char> = text.chars().collect();
-        if chars.is_empty() {
-            return String::new();
-        }
-        let n = chars.len() as f32;
-        let mut out = String::with_capacity(chars.len() * 24 + 8);
-        for (i, ch) in chars.iter().enumerate() {
-            // Triangle wave keeps both endpoints saturated instead of clipping.
-            let raw = ((i as f32 / n) + phase).fract();
-            let t = if raw < 0.5 {
-                raw * 2.0
-            } else {
-                (1.0 - raw) * 2.0
-            };
-            let c = from.lerp(to, t);
-            let _ = write!(out, "\x1b[38;2;{};{};{}m{ch}", c.0, c.1, c.2);
-        }
-        out.push_str("\x1b[0m");
-        out
-    }
 }
 
-/// Box drawing and marker glyphs. No emoji, no kaomoji — only geometry.
+/// Geometry glyphs. No emoji, no kaomoji, just shapes that line up.
 pub mod glyph {
-    /// Horizontal rule — section titles, header rules, table rules.
+    /// Horizontal rule, section titles, header rules, table rules.
     pub const H: char = '─';
-    /// Step marker: done.
-    pub const DONE: &str = "▰";
-    /// Step marker: pending.
-    pub const PENDING: &str = "▱";
     /// Inline separator.
     pub const DOT: &str = "·";
     /// Key/value leader.
     pub const LEAD: &str = "▏";
-    /// Success mark.
-    pub const OK: &str = "✔";
-    /// Failure mark.
-    pub const BAD: &str = "✘";
     /// Warning mark.
     pub const WARN: &str = "▲";
     /// Chain link.
@@ -241,13 +198,6 @@ mod tests {
         let s = p.gradient("abc", pal::CYAN, pal::AMBER);
         let stripped: String = strip_ansi(&s);
         assert_eq!(stripped, "abc");
-    }
-
-    #[test]
-    fn gradient_shift_preserves_text() {
-        let p = Palette::rich();
-        let s = p.gradient_shift("abcdef", pal::CYAN, pal::MAGENTA, 0.3);
-        assert_eq!(strip_ansi(&s), "abcdef");
     }
 
     fn strip_ansi(s: &str) -> String {

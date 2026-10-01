@@ -29,14 +29,6 @@ pub fn hexdump(data: &[u8], writer: &mut dyn Write) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Hex dump to String.
-#[must_use]
-pub fn hexdump_to_string(data: &[u8]) -> String {
-    let mut buf = Vec::new();
-    let _ = hexdump(data, &mut buf);
-    String::from_utf8_lossy(&buf).to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,7 +36,9 @@ mod tests {
     #[test]
     fn dump() {
         let data = (0u8..32).collect::<Vec<_>>();
-        let s = hexdump_to_string(&data);
+        let mut buf = Vec::new();
+        hexdump(&data, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("0000"));
         assert!(s.contains("0010"));
     }

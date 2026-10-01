@@ -3,14 +3,14 @@
 //! A `ClientHello` can span multiple TCP segments. We buffer segments per
 //! flow keyed by `(src_ip, src_port, dst_ip, dst_port)` in sequence-number
 //! order and expose the contiguous byte stream once we have it. This is the
-//! hard part of pcap mode — if you just scan packets independently you miss
+//! hard part of pcap mode. If you just scan packets independently you miss
 //! split handshakes and produce garbage fingerprints.
 //!
 //! # Design
 //! Each flow keeps a `BTreeMap<u32, Vec<u8>>` of `seq -> payload`. We insert
 //! segments by `seq`, coalesce duplicates/overlaps by keeping first-seen,
 //! and produce `reassembled()` by walking from the lowest `seq` while the
-//! next expected `seq` matches. Gaps are tolerated — we return the prefix
+//! next expected `seq` matches. Gaps are tolerated, we return the prefix
 //! up to the first gap; gaps are logged as warnings by the caller.
 //!
 //! # Limits
@@ -67,14 +67,14 @@ impl Reassembler {
     /// Insert a segment for a flow.
     ///
     /// Duplicate `seq` values are ignored (first wins). Overlaps are not
-    /// coalesced beyond exact `seq` match — good enough for v0.1.0 since
+    /// coalesced beyond exact `seq` match, good enough for v0.1.0 since
     /// `ClientHello` segments rarely overlap partially.
     pub fn insert(&mut self, key: FlowKey, segment: TcpSegment) {
         if segment.payload.is_empty() {
             return;
         }
         if !self.flows.contains_key(&key) && self.flows.len() >= self.max_flows {
-            // Drop new flow — too many.
+            // Drop new flow, too many.
             return;
         }
         let state = self.flows.entry(key).or_default();
@@ -99,7 +99,7 @@ impl Reassembler {
     ///
     /// # Panics
     ///
-    /// Panics if the segment list is non-empty but has no first element —
+    /// Panics if the segment list is non-empty but has no first element.
     /// this is unreachable because we check `is_empty()` before calling `unwrap()`.
     #[must_use]
     pub fn reassembled(&self, key: &FlowKey) -> Option<Vec<u8>> {
@@ -114,7 +114,7 @@ impl Reassembler {
         out.extend_from_slice(first_payload);
         for (seq, payload) in iter {
             if *seq != expected {
-                break; // gap — stop
+                break; // gap, stop here
             }
             out.extend_from_slice(payload);
             expected = seq.wrapping_add(payload.len() as u32);
@@ -132,18 +132,6 @@ impl Reassembler {
     #[must_use]
     pub fn flow_count(&self) -> usize {
         self.flows.len()
-    }
-
-    /// Reassembled streams for all flows (only those with contiguous prefix).
-    #[must_use]
-    pub fn all_reassembled(&self) -> HashMap<FlowKey, Vec<u8>> {
-        let mut map = HashMap::new();
-        for key in self.flows.keys() {
-            if let Some(data) = self.reassembled(key) {
-                map.insert(*key, data);
-            }
-        }
-        map
     }
 }
 

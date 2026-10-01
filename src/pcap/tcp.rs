@@ -2,7 +2,7 @@
 //!
 //! We parse IPv4 + TCP headers from the link-layer payload. Only IPv4 is
 //! supported in v0.1.0; IPv6 packets are skipped with a `None` return.
-//! IP fragmentation is not reassembled — we assume unfragmented captures
+//! IP fragmentation is not reassembled, we assume unfragmented captures
 //! (documented limitation).
 
 use std::net::Ipv4Addr;
@@ -36,9 +36,6 @@ pub struct TcpFlowPacket {
     pub key: FlowKey,
     /// Segment.
     pub segment: TcpSegment,
-    /// Direction: true if src is client (we track both directions separately).
-    #[allow(dead_code)]
-    _is_forward: bool,
 }
 
 /// Try to extract a `TcpFlowPacket` from a pcap packet's link-layer data.
@@ -108,7 +105,6 @@ pub fn parse_ipv4_tcp(dlt: u32, packet: &[u8]) -> Option<TcpFlowPacket> {
     Some(TcpFlowPacket {
         key,
         segment: TcpSegment { seq, payload },
-        _is_forward: true,
     })
 }
 

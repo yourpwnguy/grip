@@ -58,15 +58,6 @@ pub fn filter_grease(values: &[u16]) -> Vec<u16> {
     values.iter().copied().filter(|v| !is_grease(*v)).collect()
 }
 
-/// Filter GREASE from extension type ids (same table as ciphers).
-///
-/// TLS extensions use the same GREASE code points, so the same table applies.
-#[inline]
-#[must_use]
-pub const fn is_grease_ext(ext_type: u16) -> bool {
-    is_grease(ext_type)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,7 +88,7 @@ mod tests {
         // GREASE values are interleaved; sorting first would place 0x0a0a at the front
         // then filtering would still yield sorted order, but if impl did sort->filter
         // vs filter->sort they'd match here. The real bug is forgetting to filter
-        // before sorting in JA4 — this test documents the correct order.
+        // before sorting in JA4, this test documents the correct order.
         let input = [0x0a0a, 0x1302, 0x1301];
         let mut filtered = filter_grease(&input);
         filtered.sort_unstable();
