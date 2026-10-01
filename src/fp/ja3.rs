@@ -19,10 +19,10 @@ use crate::tls::grease::is_grease;
 /// Returns lowercase hex MD5.
 #[must_use]
 pub fn compute_ja3(ch: &ClientHello) -> String {
-    // TLSVersion — decimal of legacy_version (JA3 uses legacy, not real version)
+    // TLSVersion, decimal of legacy_version (JA3 uses legacy, not real version)
     let version = ch.legacy_version.to_string();
 
-    // CipherSuites — GREASE filtered, original order, decimal strings with "-"
+    // CipherSuites, GREASE filtered, original order, decimal strings with "-"
     let ciphers: Vec<String> = ch
         .cipher_suites
         .iter()
@@ -32,7 +32,7 @@ pub fn compute_ja3(ch: &ClientHello) -> String {
         .collect();
     let ciphers_str = ciphers.join("-");
 
-    // Extensions — GREASE filtered, original order, decimal ext types
+    // Extensions, GREASE filtered, original order, decimal ext types
     let exts: Vec<String> = ch
         .extensions
         .iter()
@@ -42,10 +42,10 @@ pub fn compute_ja3(ch: &ClientHello) -> String {
         .collect();
     let exts_str = exts.join("-");
 
-    // EllipticCurves — from supported_groups, GREASE filtered, original order
+    // EllipticCurves, from supported_groups, GREASE filtered, original order
     let curves_str = extract_curves(ch);
 
-    // EC Point Formats — from ec_point_formats, original order (no GREASE concept for u8)
+    // EC Point Formats, from ec_point_formats, original order (no GREASE concept for u8)
     let point_formats_str = extract_point_formats(ch);
 
     let ja3_str = format!("{version},{ciphers_str},{exts_str},{curves_str},{point_formats_str}");
@@ -56,16 +56,18 @@ pub fn compute_ja3(ch: &ClientHello) -> String {
     hex::encode(result)
 }
 
+/// JA3 serializes every field as decimal values joined by `-`, in wire order.
+/// Cipher suites and curves are `u16`, point formats are `u8`, so the item
+/// type stays generic.
+fn join_decimal<I: Iterator<Item = T>, T: std::fmt::Display>(values: I, sep: &str) -> String {
+    values.map(|v| v.to_string()).collect::<Vec<_>>().join(sep)
+}
+
 fn extract_curves(ch: &ClientHello) -> String {
     for ext in &ch.extensions {
         if let Extension::SupportedGroups(groups) = ext {
-            let filtered: Vec<String> = groups
-                .iter()
-                .copied()
-                .filter(|v| !is_grease(*v))
-                .map(|v| v.to_string())
-                .collect();
-            return filtered.join("-");
+            // JA3 wants wire order preserved, just with GREASE pulled out.
+            return join_decimal(groups.iter().copied().filter(|v| !is_grease(*v)), "-");
         }
     }
     String::new()
@@ -74,11 +76,7 @@ fn extract_curves(ch: &ClientHello) -> String {
 fn extract_point_formats(ch: &ClientHello) -> String {
     for ext in &ch.extensions {
         if let Extension::EcPointFormats(formats) = ext {
-            return formats
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("-");
+            return join_decimal(formats.iter().copied(), "-");
         }
     }
     String::new()

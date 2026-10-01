@@ -19,7 +19,7 @@
 //! Final example: "t13d010000_c02b_e5627ecdbbe6"
 //! ```
 //! The `idea.md` example `t13d000000_c02b_000f` would correspond to a server
-//! with 0 extensions in its hash (we produce a hash, not raw list) — this is
+//! with 0 extensions in its hash (we produce a hash, not a raw list), this is
 //! intentional and documented here; the shape matches but the hash is real.
 //!
 //! Future: if the `FoxIO` JA4S spec solidifies, we can swap the impl behind
@@ -75,7 +75,7 @@ pub fn compute_ja4s(sh: &ServerHello) -> Ja4s {
         sorted.sort_unstable();
         let joined = sorted
             .iter()
-            .map(std::string::ToString::to_string)
+            .map(u16::to_string)
             .collect::<Vec<_>>()
             .join(",");
         sha256_truncate12(&joined)

@@ -110,11 +110,7 @@ pub fn compute_ja4(ch: &ClientHello) -> Ja4 {
     let part2 = {
         let mut sorted = ciphers_filtered;
         sorted.sort_unstable();
-        let joined = sorted
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
+        let joined = join_decimals(&sorted);
         sha256_truncate12(&joined)
     };
 
@@ -122,34 +118,21 @@ pub fn compute_ja4(ch: &ClientHello) -> Ja4 {
     let part3 = {
         let mut sorted_exts = exts_filtered;
         sorted_exts.sort_unstable();
-        let exts_str = sorted_exts
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
+        let exts_str = join_decimals(&sorted_exts);
 
-        // Signature algorithms from 0x000d
-        let sig_algs: Vec<u16> = ch
+        let mut sorted_sigs: Vec<u16> = ch
             .extensions
             .iter()
-            .filter_map(|e| {
-                if let Extension::SignatureAlgorithms(v) = e {
-                    Some(v.as_slice())
-                } else {
-                    None
-                }
+            .filter_map(|e| match e {
+                Extension::SignatureAlgorithms(v) => Some(v.as_slice()),
+                _ => None,
             })
             .flatten()
             .copied()
             .filter(|v| !is_grease(*v))
             .collect();
-        let mut sorted_sigs = sig_algs;
         sorted_sigs.sort_unstable();
-        let sig_str = sorted_sigs
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
+        let sig_str = join_decimals(&sorted_sigs);
 
         let combined = if sig_str.is_empty() {
             exts_str
@@ -163,6 +146,16 @@ pub fn compute_ja4(ch: &ClientHello) -> Ja4 {
     };
 
     Ja4(format!("{tag}_{part2}_{part3}"))
+}
+
+/// JA4 hashes decimal values joined by commas, so this is the spec's exact
+/// serialization step.
+fn join_decimals(values: &[u16]) -> String {
+    values
+        .iter()
+        .map(u16::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn sha256_truncate12(input: &str) -> String {
